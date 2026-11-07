@@ -1,0 +1,51 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.0",
+	"FriendlyName": "MallangPhysics",
+	"Description": "Real-time soft flesh for skeletal and static meshes: hands and objects dent, bulge and drag the surface, and the flesh jiggles as it moves.",
+	"Category": "Rendering",
+	"CreatedBy": "wjsekrud",
+	"CreatedByURL": "https://github.com/wjsekrud",
+	"DocsURL": "https://wjsekrud.github.io/MallangPhysics/",
+	"SupportURL": "https://github.com/wjsekrud/MallangPhysics/issues",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"SupportedTargetPlatforms": [
+		"Win64"
+	],
+	"Modules": [
+		{
+			"Name": "Softbody",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "SoftbodyEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		}
+	],
+	"LocalizationTargets": [
+		{
+			"Name": "SoftbodySystem",
+			"LoadingPolicy": "ToolTips"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "TetMeshing",
+			"Enabled": true
+		},
+		{
+			"Name": "GeometryProcessing",
+			"Enabled": true
+		}
+	]
+}

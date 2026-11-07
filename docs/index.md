@@ -5,7 +5,7 @@ titleTemplate: Soft flesh for Unreal Engine 5.6–5.8
 
 hero:
   name: MallangPhysics
-  tagline: A softbody plugin for skeletal and static meshes in Unreal Engine 5.6–5.8
+  tagline: An open-source softbody plugin for skeletal and static meshes in Unreal Engine 5.6–5.8 (MIT)
   image:
     src: /logo.png
     alt: MallangPhysics

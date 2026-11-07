@@ -2,8 +2,8 @@
 
 ## 라이선스 {#license}
 
-- Fab 판(C++ 소스 포함): Fab Standard 라이선스.
-- GitHub 무료판(소스 없이 미리 빌드한 판), 데모 프로젝트, 이 문서: Copyright © 2026 wjsekrud. All Rights Reserved.
+- 플러그인(C++ 소스, 셰이더, 플러그인 콘텐츠)과 미리 빌드한 판: [MIT 라이선스](https://github.com/wjsekrud/MallangPhysics/blob/main/LICENSE). Copyright © 2026 wjsekrud.
+- 데모 프로젝트와 이 문서: Copyright © 2026 wjsekrud. All Rights Reserved. 데모 안의 플러그인은 MIT 라이선스입니다.
 
 데모 프로젝트는 GitHub 릴리스에 엔진 버전마다 따로 있습니다. 데모에 든 다른 제작자의 콘텐츠는 아래 [데모 프로젝트의 콘텐츠](#content-in-the-demo-project)에 적은 라이선스를 따릅니다.
 

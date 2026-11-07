@@ -4,7 +4,7 @@ The demo is the `SoftbodyDemo` project, downloaded separately from the plugin. T
 
 ## What is in it {#what-is-in-it}
 
-- `Plugins/SoftbodySystem`: the GitHub free build for that engine version (prebuilt plugin, no C++ source). The body and props are all baked.
+- `Plugins/SoftbodySystem`: the prebuilt plugin for that engine version (no C++ source). The body and props are all baked.
 - `Content/Demo`: the demo level, the props, the body (`SK_Body`), the hand (`SK_GraspHand`), the character that sits on the sofa (`SK_Sitter`), and the Blueprints (`BP_SoftbodyDemo*`).
 - `Content/ContactLab`, `Content/Profiling`: levels for comparison and measurement.
 

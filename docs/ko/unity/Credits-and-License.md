@@ -2,7 +2,7 @@
 
 ## 라이선스 {#license}
 
-Copyright © 2026 wjsekrud. All Rights Reserved. 패키지에 든 제3자 코드는 아래 각 라이선스를 따릅니다.
+[MIT 라이선스](https://github.com/wjsekrud/MallangPhysics/blob/main/Unity/com.wjsekrud.mallangphysics/LICENSE.md). Copyright © 2026 wjsekrud. 패키지에 든 제3자 코드는 아래 각 라이선스를 따릅니다.
 
 패키지는 C# 소스 없이 컴파일된 어셈블리(DLL)로 배포합니다. 셰이더와 인클루드 파일은 소스로 들어 있습니다.
 

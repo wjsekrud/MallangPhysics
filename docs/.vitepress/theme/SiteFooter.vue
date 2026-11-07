@@ -64,7 +64,7 @@ const columns = computed(() => {
           </ul>
         </nav>
       </div>
-      <p class="copyright">Copyright © 2026 wjsekrud. All Rights Reserved.</p>
+      <p class="copyright">Code released under the MIT License. Copyright © 2026 wjsekrud.</p>
     </div>
   </footer>
 </template>

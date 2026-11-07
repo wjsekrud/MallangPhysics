@@ -32,7 +32,7 @@ What does not work in this release.
 ## Platform {#platform}
 
 - **Windows only, Unreal Engine 5.6, 5.7 and 5.8. Most visual checks were done on 5.8 with D3D12 (SM6) and D3D11 (SM5).** Contact needs Shader Model 5; below it (mobile, ES3.1) contact is off for every Softbody component. The mobile preview rendering level is untested. Vulkan compiles but has not been run.
-- **The GitHub version (prebuilt, without source) does not build in the DebugGame configuration.** Development and Shipping build and package. The Fab version, which includes the source, does not have this limit. [Installation](Installation#github)
+- **The prebuilt version (without C++ source) does not build in the DebugGame configuration.** Development and Shipping build and package. Building from the source in the repository does not have this limit. [Installation](Installation#github)
 
 ## By design, not a defect {#by-design-not-a-defect}
 

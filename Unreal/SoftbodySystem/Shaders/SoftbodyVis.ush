@@ -1,0 +1,85 @@
+// Copyright (c) 2026 wjsekrud
+
+// Debug views of the bake, drawn as base color. VisMode picks the view.
+// 0: volume embedding (red = failed, yellow = extrapolated, green = inside a tetrahedron)
+// 1: physics core link (magenta = not linked or failed, cyan = linked)
+// 2: contact map checker (ADR-0003): the atlas coordinate each vertex reads, painted as a checker. Layers, buttons or lace with the
+//    same pattern as the body read the same point; lines where the pattern breaks are chart edges. Gray = no contact map.
+// 3: distance to the envelope: green = on it, red = farther outside, blue = deeper inside (full color at AttachRange).
+// 4: jiggle softness (ADR-0005): navy = does not jiggle → green → red = softest; magenta = pushed against the pull (a bake defect).
+// 5: weight of dents between vertices (ADR-0006): green = reads the contact field inside triangles (tessellation, pixel shading),
+//    red = reads it only at vertices because of a chart edge, mixed in between. Old bakes are all red. Gray = no contact map.
+//    The vertex density weight (일지 74) is multiplied in: triangles smaller than BetweenEdgeTexels cells (hands, face) are red
+//    (Phong surface only).
+// CarrierUV: the mesh's contact map UV channel (ADR-0007, per-instance chart UV, negative = none). With it, view 2 paints with this
+//    UV so you can check that the pattern continues across UV0 seams, and view 5 is green (no straddling triangles) except for
+//    vertices on UV0 seams (gap guard).
+// The attribute texture is a per-vertex-index table, so it is evaluated in the vertex shader and only the resulting color goes
+// through a VertexInterpolator (MF_SoftbodyDebugVis wraps this rule).
+#pragma once
+
+float3 SoftbodyBakeVis(
+	float2 TexUV, float2 CarrierUV,
+	Texture2D AttrDbgTex, SamplerState AttrDbgTexSampler,
+	Texture2D CarrierUVTex, SamplerState CarrierUVTexSampler,
+	float VisMode, float AttachRange, float BetweenEdgeTexels)
+{
+if (VisMode > 4.5)
+{
+	float4 carrier = CarrierUVTex.SampleLevel(CarrierUVTexSampler, TexUV.xy, 0);
+	if (carrier.a < 0.5)
+	{
+		return float3(0.35, 0.35, 0.35);
+	}
+	// 표 A − 2 = 무게(0/1) + 4(이음매) + 8 × round(변 길이 칸 수 × 64) — SoftbodySurfaceCarrierVS와 같은 풀이
+	float code = carrier.a - 2.0;
+	float edgeTexels = code >= 8.0 ? floor(code / 8.0) / 64.0 : 1e4;
+	float density = BetweenEdgeTexels > 0.0 ? saturate(edgeTexels / BetweenEdgeTexels - 1.0) : 1.0;
+	code = code >= 8.0 ? code - 8.0 * floor(code / 8.0) : code;
+	bool seam = code > 3.0;
+	float weight = (CarrierUV.x >= 0.0 ? (seam ? 0.0 : 1.0) : saturate(seam ? code - 4.0 : code)) * density;
+	return lerp(float3(1.0, 0.1, 0.05), float3(0.1, 0.85, 0.2), weight);
+}
+if (VisMode > 3.5)
+{
+	float softness = AttrDbgTex.SampleLevel(AttrDbgTexSampler, TexUV.xy, 0).g;
+	if (softness < -0.02)
+	{
+		return float3(1.0, 0.05, 1.0);
+	}
+	float t = saturate(softness);
+	return t < 0.5
+		? lerp(float3(0.05, 0.08, 0.45), float3(0.1, 0.85, 0.2), t * 2.0)
+		: lerp(float3(0.1, 0.85, 0.2), float3(1.0, 0.1, 0.05), t * 2.0 - 1.0);
+}
+if (VisMode > 1.5)
+{
+	float4 carrier = CarrierUVTex.SampleLevel(CarrierUVTexSampler, TexUV.xy, 0);
+	if (carrier.a < 0.5)
+	{
+		return float3(0.35, 0.35, 0.35);
+	}
+	if (VisMode < 2.5)
+	{
+		carrier.xy = CarrierUV.x >= 0.0 ? CarrierUV : carrier.xy;
+		float2 cell = floor(carrier.xy * 16.0);
+		float checker = fmod(cell.x + cell.y, 2.0);
+		float3 hue = frac(float3(carrier.x * 3.1, carrier.y * 2.3, (carrier.x + carrier.y) * 1.7));
+		return lerp(0.3, 1.0, checker) * (0.35 + 0.65 * hue);
+	}
+	float t = saturate(abs(carrier.z) / max(AttachRange, 1e-3));
+	return carrier.z >= 0.0
+		? lerp(float3(0.05, 1.0, 0.1), float3(1.0, 0.05, 0.05), t)
+		: lerp(float3(0.05, 1.0, 0.1), float3(0.1, 0.3, 1.0), t);
+}
+float4 dbg = AttrDbgTex.SampleLevel(AttrDbgTexSampler, TexUV.xy, 0);
+if (VisMode < 0.5)
+{
+	if (dbg.b < 0.25) return float3(1.0, 0.02, 0.02);
+	if (dbg.b < 0.75) return float3(1.0, 0.55, 0.02);
+	return float3(0.02, 1.0, 0.08);
+}
+return dbg.a > 0.5
+	? float3(0.02, 0.85, 1.0)
+	: float3(1.0, 0.02, 0.75);
+}

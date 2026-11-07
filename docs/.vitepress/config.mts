@@ -6,6 +6,7 @@ import { dirOf, type Engine } from './theme/engines'
 
 // GitHub Pages 프로젝트 사이트 주소(wjsekrud.github.io/MallangPhysics/)에 맞춘 경로
 const base = '/MallangPhysics/'
+const SITE = 'https://wjsekrud.github.io/MallangPhysics/'
 
 // 쪽은 엔진·언어마다 한 벌이다. 영어 쪽은 맨 위, 한국어 쪽은 /ko/ 아래에 같은 파일 이름으로 두고,
 // Unity 쪽은 그 아래 unity/에 둔다: UE = /X, /ko/X, Unity = /unity/X, /ko/unity/X (theme/engines.ts)
@@ -120,8 +121,8 @@ const untranslatedLinks = (md: MarkdownRenderer) => {
 
 const description: Record<Engine, [string, string]> = {
   ue: [
-    'Real-time soft flesh for Unreal Engine 5.8: dents, bulges, drag, lumps, self contact and jiggle on skeletal and static meshes.',
-    'Unreal Engine 5.8용 실시간 말랑한 살: 스켈레탈 메시와 스태틱 메시의 눌림, 솟음, 끌림, 덩어리, 자기 접촉, 출렁임.',
+    'Open-source soft body plugin for Unreal Engine 5.6–5.8 (MIT): real-time dents, bulges, skin drag, lumps, self contact and jiggle physics on skeletal and static meshes.',
+    'Unreal Engine 5.6~5.8용 오픈 소스 소프트바디 플러그인(MIT): 스켈레탈 메시와 스태틱 메시의 실시간 눌림, 솟음, 끌림, 덩어리, 자기 접촉, 출렁임.',
   ],
   // FULL 11-06: Full(솟음·끌림)이 Unity 베타에 들어가면 여기에도 더한다
   unity: [
@@ -195,9 +196,23 @@ export default defineConfig<DefaultTheme.Config & { enginePages?: string[] }>({
   base,
   cleanUrls: true,
   // 검색 엔진용 사이트 지도(sitemap.xml). Search Console에 제출한다
-  sitemap: { hostname: 'https://wjsekrud.github.io/MallangPhysics/' },
+  sitemap: { hostname: SITE },
   srcExclude: ['README.md', ...drafts.map((d) => d + '**')],
   head: [['link', { rel: 'icon', type: 'image/png', href: `${base}favicon.png` }]],
+  // 링크를 붙여 넣었을 때 뜨는 카드(제목·설명·그림)와 검색 엔진용 정식 주소
+  transformHead: ({ pageData, title, description }) => {
+    const url = SITE + pageData.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '')
+    return [
+      ['link', { rel: 'canonical', href: url }],
+      ['meta', { property: 'og:type', content: 'website' }],
+      ['meta', { property: 'og:site_name', content: 'MallangPhysics' }],
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: url }],
+      ['meta', { property: 'og:image', content: `${SITE}og.png` }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ]
+  },
 
   // 영어 번역이 없는 쪽으로 건 링크는 한국어 판으로(위 untranslatedLinks).
   // npm run dev에서만 한국어 쪽을 브라우저로 고친다(theme/editor.ts). 빌드에는 넣지 않는다

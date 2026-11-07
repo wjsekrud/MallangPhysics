@@ -5,7 +5,7 @@ titleTemplate: Unreal Engine 5.6~5.8을 위한 말랑한 살
 
 hero:
   name: MallangPhysics
-  tagline: 스켈레탈 메시와 스태틱 메시를 위한 Unreal Engine 5.6~5.8 소프트바디 플러그인
+  tagline: 스켈레탈 메시와 스태틱 메시를 위한 Unreal Engine 5.6~5.8 오픈 소스 소프트바디 플러그인(MIT)
   image:
     src: /logo.png
     alt: MallangPhysics

@@ -2,7 +2,7 @@
 
 ## License {#license}
 
-Copyright © 2026 wjsekrud. All Rights Reserved. Third-party code in the package follows its own license, listed below.
+[MIT License](https://github.com/wjsekrud/MallangPhysics/blob/main/Unity/com.wjsekrud.mallangphysics/LICENSE.md). Copyright © 2026 wjsekrud. Third-party code in the package follows its own license, listed below.
 
 The package ships as compiled assemblies (DLLs) without C# source. The shaders and include files are included as source.
 

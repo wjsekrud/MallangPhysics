@@ -4,7 +4,7 @@
 
 ## 들어 있는 것 {#what-is-in-it}
 
-- `Plugins/SoftbodySystem`: 그 엔진 버전의 GitHub 무료판(미리 빌드한 플러그인, C++ 소스 없음). 몸·소품은 모두 베이크되어 있습니다.
+- `Plugins/SoftbodySystem`: 그 엔진 버전의 미리 빌드한 플러그인(C++ 소스 없음). 몸·소품은 모두 베이크되어 있습니다.
 - `Content/Demo`: 데모 레벨, 소품, 몸(`SK_Body`)과 손(`SK_GraspHand`), 소파에 앉는 캐릭터(`SK_Sitter`), 블루프린트(`BP_SoftbodyDemo*`).
 - `Content/ContactLab`, `Content/Profiling`: 비교·측정용 레벨.
 

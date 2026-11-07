@@ -4,6 +4,7 @@
   "displayName": "MallangPhysics",
   "description": "Real-time soft flesh for skinned and static meshes in URP: hands and objects dent the surface and the flesh rises around the press, gems and buckles stay rigid, lumps of flesh shift, and the flesh jiggles as it moves.",
   "unity": "6000.3",
+  "license": "MIT",
   "author": {
     "name": "wjsekrud"
   },

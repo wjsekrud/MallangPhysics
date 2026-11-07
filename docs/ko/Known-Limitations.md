@@ -32,7 +32,7 @@
 ## 플랫폼 {#platform}
 
 - **Windows의 Unreal Engine 5.6, 5.7, 5.8만 지원하며, 화면 확인은 대부분 5.8의 D3D12(SM6)와 D3D11(SM5)에서 했습니다.** 접촉에는 Shader Model 5가 필요하며, 그보다 낮으면(모바일, ES3.1) 모든 Softbody 컴포넌트에서 접촉이 꺼집니다. 모바일 프리뷰 렌더링 레벨은 시험하지 않았습니다. Vulkan은 컴파일되지만 실행해 보지 않았습니다.
-- **GitHub 판(소스 없이 미리 빌드한 판)은 DebugGame 구성으로 빌드되지 않습니다.** Development와 Shipping 구성은 빌드하고 패키징할 수 있습니다. 소스가 든 Fab 판에는 이 제한이 없습니다. [설치](Installation#github)
+- **미리 빌드한 판(C++ 소스 없음)은 DebugGame 구성으로 빌드되지 않습니다.** Development와 Shipping 구성은 빌드하고 패키징할 수 있습니다. 저장소의 소스로 빌드하면 이 제한이 없습니다. [설치](Installation#github)
 
 ## 결함이 아닌 설계 {#by-design-not-a-defect}
 

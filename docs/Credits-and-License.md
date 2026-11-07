@@ -2,8 +2,8 @@
 
 ## License {#license}
 
-- Fab version (with the C++ source): Fab Standard License.
-- Free GitHub version (prebuilt, without source), the demo project and this documentation: Copyright © 2026 wjsekrud. All Rights Reserved.
+- The plugin (C++ source, shaders and plugin content) and the prebuilt version: [MIT License](https://github.com/wjsekrud/MallangPhysics/blob/main/LICENSE). Copyright © 2026 wjsekrud.
+- The demo project and this documentation: Copyright © 2026 wjsekrud. All Rights Reserved. The plugin inside the demo is under the MIT License.
 
 The demo project is on the GitHub release, one per engine version. Content by other creators in the demo follows the licenses listed under [Content in the demo project](#content-in-the-demo-project).
 
