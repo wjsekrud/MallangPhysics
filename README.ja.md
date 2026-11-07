@@ -4,7 +4,9 @@
 
 Windows 版 Unreal Engine 5.6・5.7・5.8 で、スケルタルメッシュとスタティックメッシュを柔らかくするオープンソースのソフトボディプラグインです（MIT ライセンス）。手や物体が押した所はへこみ、周りの肉は盛り上がります。動く手は肌を引きずり、体が動くと肉が揺れます。エディタでメッシュを一度ベイクしてコンポーネントを一つ付けると、変形は GPU で計算されます。Unity 6.3 URP 版もベータとして同梱しています。
 
-![柔らかいボールを握る手と、柔らかいクッションを押す手](.github/media/hero.webp)
+[![柔らかいボールを握る手と、柔らかいクッションを押す手](.github/media/hero.webp)](https://www.youtube.com/watch?v=n5HpN2XGicA)
+
+**動画:** https://www.youtube.com/watch?v=n5HpN2XGicA
 
 **ドキュメント:** https://wjsekrud.github.io/MallangPhysics/ （英語・韓国語のみ）
 

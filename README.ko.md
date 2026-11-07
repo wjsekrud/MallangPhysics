@@ -4,7 +4,9 @@
 
 Windows의 Unreal Engine 5.6, 5.7, 5.8에서 스켈레탈 메시와 스태틱 메시를 말랑하게 만드는 오픈 소스 소프트바디 플러그인입니다(MIT 라이선스). 손과 물체가 누른 자리는 들어가고 둘레의 살은 솟으며, 움직이는 손은 피부를 끌고 가고, 몸이 움직이면 살이 출렁입니다. 에디터에서 메시를 한 번 베이크하고 컴포넌트 하나를 붙이면, 변형은 GPU에서 계산됩니다. Unity 6.3 URP 판이 베타로 같이 있습니다.
 
-![말랑한 공을 쥐는 손과 말랑한 방석을 누르는 손](.github/media/hero.webp)
+[![말랑한 공을 쥐는 손과 말랑한 방석을 누르는 손](.github/media/hero.webp)](https://www.youtube.com/watch?v=n5HpN2XGicA)
+
+**영상:** https://www.youtube.com/watch?v=n5HpN2XGicA
 
 **문서:** https://wjsekrud.github.io/MallangPhysics/ko/ (한국어, English)
 

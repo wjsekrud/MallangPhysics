@@ -4,7 +4,9 @@
 
 An open-source soft body plugin for skeletal and static meshes in Unreal Engine 5.6, 5.7 and 5.8 on Windows (MIT License). Hands and objects dent the surface, the flesh around the dent bulges, a moving hand drags the skin along, and the flesh jiggles when the body moves. You bake a mesh once in the editor and add one component; the deformation runs on the GPU. A Unity 6.3 URP version is included as a beta.
 
-![A hand squeezing a soft ball and a hand pressing into a soft cushion](.github/media/hero.webp)
+[![A hand squeezing a soft ball and a hand pressing into a soft cushion](.github/media/hero.webp)](https://www.youtube.com/watch?v=n5HpN2XGicA)
+
+**Video:** https://www.youtube.com/watch?v=n5HpN2XGicA
 
 **Documentation:** https://wjsekrud.github.io/MallangPhysics/ (English, 한국어)
 

@@ -16,6 +16,9 @@ hero:
     - theme: alt
       text: 설치
       link: /ko/Installation
+    - theme: alt
+      text: 영상
+      link: https://www.youtube.com/watch?v=n5HpN2XGicA
 
 showcase:
   title: 기능

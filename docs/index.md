@@ -16,6 +16,9 @@ hero:
     - theme: alt
       text: Installation
       link: /Installation
+    - theme: alt
+      text: Video
+      link: https://www.youtube.com/watch?v=n5HpN2XGicA
 
 showcase:
   title: Features
