@@ -1,0 +1,2 @@
+# Store every file byte for byte: the Unity package checks shader hashes, and binary data must not get line-ending changes.
+* -text

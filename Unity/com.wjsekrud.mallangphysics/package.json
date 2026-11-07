@@ -1,0 +1,44 @@
+{
+  "name": "com.wjsekrud.mallangphysics",
+  "version": "0.1.0-beta.1",
+  "displayName": "MallangPhysics",
+  "description": "Real-time soft flesh for skinned and static meshes in URP: hands and objects dent the surface and the flesh rises around the press, gems and buckles stay rigid, lumps of flesh shift, and the flesh jiggles as it moves.",
+  "unity": "6000.3",
+  "author": {
+    "name": "wjsekrud"
+  },
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "17.3.0",
+    "com.unity.burst": "1.8.30",
+    "com.unity.mathematics": "1.3.3",
+    "com.unity.collections": "2.6.8",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.screencapture": "1.0.0",
+    "com.unity.modules.uielements": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Quick Start",
+      "description": "A cushion mesh to follow the Quick Start with: bake it into a softbody, then press it with a collider.",
+      "path": "Samples~/QuickStart"
+    },
+    {
+      "displayName": "Shader Graph",
+      "description": "A URP Lit Shader Graph with the Softbody Custom Function nodes wired, to copy for your own materials.",
+      "path": "Samples~/ShaderGraph"
+    }
+  ],
+  "unityRelease": "26f1",
+  "keywords": [
+    "softbody",
+    "jiggle",
+    "flesh",
+    "physics",
+    "compute",
+    "urp"
+  ],
+  "documentationUrl": "https://wjsekrud.github.io/MallangPhysics/unity/",
+  "changelogUrl": "https://github.com/wjsekrud/MallangPhysics/blob/main/Unity/com.wjsekrud.mallangphysics/CHANGELOG.md",
+  "licensesUrl": "https://github.com/wjsekrud/MallangPhysics/blob/main/Unity/com.wjsekrud.mallangphysics/Third%20Party%20Notices.md"
+}

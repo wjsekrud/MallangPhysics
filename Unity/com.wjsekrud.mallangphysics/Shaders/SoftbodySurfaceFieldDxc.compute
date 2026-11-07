@@ -1,0 +1,69 @@
+// Softbody 표면 장 컴퓨트 셰이더 Basic 자산의 DXC판 — D3D12(D-60)와 Vulkan(D-64)이 쓴다. 커널 줄·매크로·include는 SoftbodySurfaceField.compute(FXC판)와 같다
+// (Tools/sync_shared_shaders.py --check가 두 파일을 다 본다). 커널 본문은 같은 Shared/SoftbodySurfaceField.hlsl이다.
+// 까닭: 같은 FXC 바이트코드(DXBC)를 D3D12 드라이버가 번역하면 같은 일감에서 끌림 모으기(DragGatherCS)의 공유 메모리 읽기가 Vulkan의 2배, 뱅크 충돌이
+// 35배였다(Nsight Graphics GPU Trace, 2026-10-18). DXC(DXIL)로 컴파일하면 시연 장면의 D3D12 표면 장 GPU 시간이 21~25% 줄었다.
+// 한 파일에 넣지 않는 까닭: D3D11은 DXIL을 돌리지 못하는데, Unity 6.3은 `#pragma use_dxc d3d11`을 D3D11 장치까지 DXC로 만들고 커널 IsSupported도
+// 참으로 돌려줘 D3D11에서 커널이 조용히 아무것도 하지 않는다(6.3은 d3d12라는 이름을 모른다).
+// Vulkan도 이 판을 쓴다(D-64): FXC판을 Unity가 SPIR-V로 옮긴 판은 덩어리 풀이(LumpSolveCS)가 GPU를 2초 넘게 묶어 드라이버가 재설정됐고
+// (2026-11-04), 처음 쓸 때 컴파일도 569 s였다. Unity는 Vulkan DXC를 실험 단계로 둔다. Metal은 FXC판을 쓴다(견줄 기계가 없다).
+// 커널 줄 꼴과 Basic/Full 나눔은 FXC판 머리 주석을 본다.
+#pragma kernel ContactCS
+#pragma kernel ContactGroupsCS
+#pragma kernel DentCS
+#pragma kernel DentCoarseAddCS
+#pragma kernel DentCopyCS
+#pragma kernel CarrierKindCS
+#pragma kernel CoarseInitCS SB_HARD_SURFACE=1
+#pragma kernel CoarseRowCS
+#pragma kernel CoarseMaterialCS
+#pragma kernel DragLinksCS
+#pragma kernel DentCoarseRestrictCS
+#pragma kernel DentCoarseCS
+#pragma kernel ComposeCS
+#pragma kernel GhostGatherCS
+#pragma kernel GhostApplyCS
+#pragma kernel NormalCS
+#pragma kernel LumpActiveCS
+#pragma kernel LumpForceCS
+#pragma kernel LumpStartCS
+#pragma kernel LumpSolveCS
+#pragma kernel LumpRegionCS
+#pragma kernel TileLinksCS
+#pragma kernel TileListCS
+#pragma kernel ActivityArgsCS
+#pragma kernel CopyCS
+#pragma kernel ClearCS
+#pragma kernel StatsCS
+// r4-sep begin
+// 부위 나누기(Separated Pairs) 함몰 채널 순열: 부위 나누기 장의 함몰 목록 앞쪽(부위 몫이 창에 닿는 묶음)만 이 커널로 푼다(UE DentCS 순열 SB_SEPARATION).
+// _SH = 하드 서피스 판이 함께 도는 장(UE HardMode 1 — 판 장 && 긴 몫).
+#pragma kernel DentCS_S DentCS=DentCS_S SB_SEPARATION=1
+#pragma kernel DentCS_SH DentCS=DentCS_SH SB_SEPARATION=1 SB_HARD_SURFACE=1
+// r4-sep end
+
+// r4-hard begin
+// 하드 서피스 순열(_H = SB_HARD_SURFACE 1, UE FSoftbodyHardSurfaceDim): Flex 칠로 구운 조각(판)이 있거나 연속 굽힘만 도는 장이 고른다
+// (C# SurfaceFieldHardKernels·SurfaceFieldPasses.Hard.cs). 접촉·목록·합치기는 조각 순열이면 Basic에서도, 함몰 셋은 Full에서만(UE HardMode).
+// 부위 나누기와 같이 켜진 함몰 판(DentCS_SH)은 r4-sep 블록에 있다.
+#pragma kernel ContactCS_H ContactCS=ContactCS_H SB_HARD_SURFACE=1
+#pragma kernel DentCS_H DentCS=DentCS_H SB_HARD_SURFACE=1
+#pragma kernel DentCoarseRestrictCS_H DentCoarseRestrictCS=DentCoarseRestrictCS_H SB_HARD_SURFACE=1
+#pragma kernel DentCoarseCS_H DentCoarseCS=DentCoarseCS_H SB_HARD_SURFACE=1
+#pragma kernel ComposeCS_H ComposeCS=ComposeCS_H SB_HARD_SURFACE=1
+#pragma kernel TileListCS_H TileListCS=TileListCS_H SB_HARD_SURFACE=1
+// r4-hard end
+
+// d3d11 = D3D11과 D3D12 둘 다(Unity 6.3의 이름). 이 판은 D3D12와 Vulkan에서만 쓴다(위 까닭). D3D11 장치에서도 만들어지지만 런타임이 고르지 않는다.
+#pragma only_renderers d3d11 vulkan
+#pragma use_dxc d3d11 vulkan
+
+// 응답 표 샘플러(원본 `SamplerState ContactResponseSampler;`): Unity 컴퓨트는 샘플러 이름이 sampler<텍스처>이거나 필터·랩 낱말이 든 인라인 이름이어야
+// 묶는다(규약 10 §6.5). 공유 사본은 고치지 않고 include 앞에서 이름만 바꾼다 — 세 겹 선형·가장자리 고정(UE GetLongSampler와 같은 뜻, 표에 밉이 없어
+// Linear와 같다). 유니티 머티리얼(Shaders/Include/SoftbodyMaterial.hlsl)도 같은 인라인 이름을 쓴다. C#은 이 샘플러를 묶지 않는다(규약 20 §2.1 ①).
+#define ContactResponseSampler sampler_LinearClamp
+
+// FXC판과 같은 타입 버퍼 → 구조화 버퍼 매크로(D-07, SoftbodySurfaceField.compute 주석).
+#define Buffer StructuredBuffer
+#define RWBuffer RWStructuredBuffer
+
+#include "Packages/com.wjsekrud.mallangphysics/Shaders/Shared/SoftbodySurfaceField.hlsl"

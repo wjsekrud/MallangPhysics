@@ -1,0 +1,14 @@
+{
+  "name": "mallangphysics-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "pretendard": "^1.3.9",
+    "vitepress": "1.6.4"
+  }
+}

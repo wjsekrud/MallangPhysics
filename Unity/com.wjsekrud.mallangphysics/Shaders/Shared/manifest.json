@@ -1,0 +1,2923 @@
+{
+  "generator": "Tools/sync_shared_shaders.py",
+  "note": "자동 생성 — 손으로 고치지 마라. 커널·전역 파라미터·#define은 UE 원본에서 읽은 것(줄 번호는 넣지 않는다: UE가 고칠 때마다 바뀌어 비교가 시끄럽다).",
+  "files": [
+    {
+      "source": "Plugins/SoftbodySystem/Shaders/SoftbodySurfaceField.usf",
+      "copy": "SoftbodySurfaceField.hlsl",
+      "sha256": "8590b4e5f9d85840da4a74331e49f3484d34e6e770daa7a9326c5f9bbd799723",
+      "git_blob": "946fc663149b2e9e14ce62030fa9992b7521d127",
+      "lines": 12973
+    },
+    {
+      "source": "Plugins/SoftbodySystem/Shaders/SoftbodyFieldCommon.ush",
+      "copy": "SoftbodyFieldCommon.hlsl",
+      "sha256": "452b17f8b54c10a6e99ded2442f385d635970a6cf9272fc8e9ddccf9a8988043",
+      "git_blob": "63b2da440e529a873ba9dadfd4f366b56ec7a1c1",
+      "lines": 218
+    },
+    {
+      "source": "Plugins/SoftbodySystem/Shaders/SoftbodyContactResponse.ush",
+      "copy": "SoftbodyContactResponse.hlsl",
+      "sha256": "5421d99477f3b71be7cca59083b0fbd3c013990322e30332e070db404d34ec38",
+      "git_blob": "5a380caf43f97cd148932f788857b6f64f7e4597",
+      "lines": 371
+    },
+    {
+      "source": "Plugins/SoftbodySystem/Shaders/SoftbodyKernel.ush",
+      "copy": "SoftbodyKernel.hlsl",
+      "sha256": "2ffb4d1545a6309334153c698937ca11a03f2a83874ed3869ff6d47e6efeaffe",
+      "git_blob": "815e09fc8285917e36ac922956ad4f6960b90844",
+      "lines": 360
+    },
+    {
+      "source": "Plugins/SoftbodySystem/Shaders/SoftbodySurfaceShading.ush",
+      "copy": "SoftbodySurfaceShading.hlsl",
+      "sha256": "24b3756e842eefacab01c010a974c549af952ffcf0ae9304bde28904a13386f7",
+      "git_blob": "3d46f6a6a08277e2d72f9038113ab8b1229d0215",
+      "lines": 439
+    },
+    {
+      "source": "Plugins/SoftbodySystem/Shaders/SoftbodyVis.ush",
+      "copy": "SoftbodyVis.hlsl",
+      "sha256": "758a5b24ce78d63ba972571a72b067b0f0444be0ef1720fcc5dc410971b2e6bc",
+      "git_blob": "7a2aa03e1be82bd3e5cb5f8fbe50a9dbed2940d7",
+      "lines": 81
+    }
+  ],
+  "kernels": [
+    {
+      "name": "ContactCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "ContactGroupsCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "DentCS",
+      "numthreads": "SB_DENT_SIDE, SB_DENT_ROWS, 1",
+      "threads": [
+        32,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "DentCoarseAddCS",
+      "numthreads": "SB_TILE, SB_TILE, 1",
+      "threads": [
+        16,
+        16,
+        1
+      ]
+    },
+    {
+      "name": "DentCopyCS",
+      "numthreads": "SB_TILE, SB_TILE, 1",
+      "threads": [
+        16,
+        16,
+        1
+      ]
+    },
+    {
+      "name": "GrabResolveCS",
+      "numthreads": "SB_GRAB_ROWS, 1, 1",
+      "threads": [
+        8,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "CarrierKindCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "CoarseInitCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "CoarseRowCS",
+      "numthreads": "SB_COARSE_INDEX_THREADS, 1, 1",
+      "threads": [
+        1024,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "CoarseMaterialCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "DragLinksCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "DentCoarseRestrictCS",
+      "numthreads": "SB_TILE, SB_TILE, 1",
+      "threads": [
+        16,
+        16,
+        1
+      ]
+    },
+    {
+      "name": "DentCoarseCS",
+      "numthreads": "SB_DENT_SIDE, SB_DENT_ROWS, 1",
+      "threads": [
+        32,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "ContactPressureCellsCS",
+      "numthreads": "SB_TILE, SB_TILE, 1",
+      "threads": [
+        16,
+        16,
+        1
+      ]
+    },
+    {
+      "name": "ContactPressureArgsCS",
+      "variants": [
+        {
+          "numthreads": "256, 1, 1",
+          "threads": [
+            256,
+            1,
+            1
+          ],
+          "when": "SB_HARD_SURFACE"
+        },
+        {
+          "numthreads": "1, 1, 1",
+          "threads": [
+            1,
+            1,
+            1
+          ],
+          "when": "!(SB_HARD_SURFACE)"
+        }
+      ]
+    },
+    {
+      "name": "ContactPressurePiecesCS",
+      "numthreads": "256, 1, 1",
+      "threads": [
+        256,
+        1,
+        1
+      ],
+      "when": "SB_HARD_SURFACE"
+    },
+    {
+      "name": "ContactPressureMatrixCS",
+      "numthreads": "16, 16, 1",
+      "threads": [
+        16,
+        16,
+        1
+      ]
+    },
+    {
+      "name": "ContactPressureSolveCS",
+      "numthreads": "SB_PRESSURE_SOLVE_THREADS, 1, 1",
+      "threads": [
+        1024,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "ContactLongGatherCS",
+      "numthreads": "SB_COARSE_GROUP, SB_COARSE_GROUP, SB_LONG_SLICES",
+      "threads": [
+        8,
+        8,
+        8
+      ]
+    },
+    {
+      "name": "DragSourceCS",
+      "numthreads": "SB_COARSE_GROUP, SB_COARSE_GROUP, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "DragCorrectCS",
+      "numthreads": "SB_COARSE_GROUP, SB_COARSE_GROUP, SB_DRAG_SLICES",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "DragGatherCS",
+      "numthreads": "SB_COARSE_GROUP, SB_COARSE_GROUP, SB_DRAG_SLICES",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "ComposeCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "GhostGatherCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "GhostApplyCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "NormalCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "LumpActiveCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "LumpForceCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "LumpStartCS",
+      "numthreads": "SB_LUMP_GROUPS, 1, 1",
+      "threads": [
+        16,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "LumpSolveCS",
+      "numthreads": "SB_LUMP_SOLVE_THREADS, 1, 1",
+      "threads": [
+        32,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "LumpRegionCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "TileLinksCS",
+      "numthreads": "SB_TILE, SB_TILE, 1",
+      "threads": [
+        16,
+        16,
+        1
+      ]
+    },
+    {
+      "name": "TileListCS",
+      "numthreads": "SB_LIST_THREADS, 1, 1",
+      "threads": [
+        1024,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "ActivityArgsCS",
+      "numthreads": "1, 1, 1",
+      "threads": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "CopyCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "ClearCS",
+      "numthreads": "8, 8, 1",
+      "threads": [
+        8,
+        8,
+        1
+      ]
+    },
+    {
+      "name": "StatsCS",
+      "numthreads": "1, 1, 1",
+      "threads": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "name": "CarrierPosition",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierNormal",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "Resolution",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierRedirect",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TilesPerSide",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ThicknessScale",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierVolume",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bCarrierVolume",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "VolumeValue",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "VolumeOffset",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "SkinLength",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragBlock",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragResolution",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragTexelSize",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragLinks",
+      "type": "Texture2D<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragState",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierSkinIndex",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierSkinWeight",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "Shapes",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "Bones",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PreviousBones",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "Planes",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "NumShapes",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bSkinned",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ComponentScale",
+      "type": "float3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "MaxContactDepth",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TexelSize",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "EdgeOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PositionOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ShapeMotion",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FieldMotion",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatePrevious",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragRatio",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpStiffen",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bMotionHistory",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpAnchor",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragInputOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ActivityOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TilePressedBase",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactGroups",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactGroupCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabInput",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabState",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabCount",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabPickBase",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "EdgeTrimWidth",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bContactLongRoom",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierColumn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bCarrierColumn",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierLift",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardLiftScale",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bCarrierLift",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactLabels",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ColliderIds",
+      "type": "StructuredBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bLabels",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bLabelHistory",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bSweep",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FieldVoxels",
+      "type": "StructuredBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FieldInstances",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "NumFieldInstances",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierLump",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierLumpSideA",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierLumpSideB",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bLumpSide",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "InertiaBridge",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpMode",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ComponentRotation",
+      "type": "float4",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FrameToActor",
+      "type": "float3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpIterate",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpNormalOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpDepthOut",
+      "type": "RWTexture2D<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseResolution",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBlock",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseTexelSize",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseInfo",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bLumpRegion",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpRegionIndex",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpRegionTable",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpRegionOffset",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactGroupsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactGroupCountOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactArgsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpListOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpListCountOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PositionIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseRow",
+      "type": "Texture2D<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LandmarkDistance",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "NumLandmarks",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LandmarkRowTexels",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StateIn",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StateOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentTileBits",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileResidualOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierKind",
+      "type": "Texture2D<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "AcceptedOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "AcceptBlend",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "AcceptReturn",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragInput",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseOn",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarse",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseFix",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentStateInOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentTiles",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentTileCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileAnyResidualOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentListPart",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentPass",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HoldDecay",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentTheta",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentDelta",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HoldState",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentPins",
+      "type": "RWTexture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentPinsIn",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactLong",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bContactLong",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierSeparation",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bSeparation",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactLongSeparation",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierPiece",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceFrames",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceMotion",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceMotionOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierSoftness",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bCarrierSoftness",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactBend",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardRefThickness",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FlexOffset",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceCount",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceTileRange",
+      "type": "StructuredBuffer<uint2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceTileList",
+      "type": "StructuredBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "SeparationStateIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "SeparationStateOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabStateOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabPicks",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabFlexPaint",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bGrabFlexPaint",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GrabFlexOffset",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CarrierKindOut",
+      "type": "RWTexture2D<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseInfoOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseLayer",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseLayerOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseRowOut",
+      "type": "RWTexture2D<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseMaterial",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseMaterialOut",
+      "type": "RWTexture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseSkin",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseSkinOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseSeparationOut",
+      "type": "RWTexture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bCarrierSeparation",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBendRawOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBendRaw",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBendOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBend",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureHeaderOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureHeader",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureCellsOut",
+      "type": "RWStructuredBuffer<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureCells",
+      "type": "StructuredBuffer<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureSlotOut",
+      "type": "RWTexture2D<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureSlot",
+      "type": "Texture2D<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureMatrixOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureMatrix",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureForceOut",
+      "type": "RWBuffer<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureForce",
+      "type": "Buffer<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureArgsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureStatsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactLongOut",
+      "type": "RWTexture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactBendOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactResponseBendFull",
+      "type": "Texture3D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBendMaxOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseBendMax",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureSeparationOut",
+      "type": "RWStructuredBuffer<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureSeparation",
+      "type": "StructuredBuffer<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactLongSeparationOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactResponseLong",
+      "type": "Texture3D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactResponseAmounts",
+      "type": "Texture3D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactResponseBendAmounts",
+      "type": "Texture3D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ContactResponseSampler",
+      "type": "SamplerState",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureRounds",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureSteps",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PressureReachLayers",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PlasticShare",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragLinksOut",
+      "type": "RWTexture2D<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseList",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseListBase",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseBusy",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseBusyOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseStartOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseStart",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseIn",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseFixOut",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseFirst",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseLast",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseTheta",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DentCoarseHalf",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardWorkOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardWork",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardHandOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardHand",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceCellRange",
+      "type": "StructuredBuffer<uint2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardPieceCellList",
+      "type": "StructuredBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardCellPlate",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FRowOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FRow",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TiedPressureOut",
+      "type": "RWTexture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TiedPressure",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "HardArgsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragHold",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragHoldNext",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragHoldNextOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragHoldOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragStateOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSourcesOut",
+      "type": "RWStructuredBuffer<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSources",
+      "type": "StructuredBuffer<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSourceQOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSourceQ",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSourceSeparationOut",
+      "type": "RWStructuredBuffer<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSourceSeparation",
+      "type": "StructuredBuffer<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CoarseSeparation",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragSourceCapacity",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragClustersOut",
+      "type": "RWStructuredBuffer<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragClusters",
+      "type": "StructuredBuffer<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragClusterQOut",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragClusterQ",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragClusterCapacity",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragHeaderOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragHeader",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileCountOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DragReachMax",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DisplacementIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpNormalIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "DisplacementOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "EdgeIn",
+      "type": "Texture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PrevDisplacementIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StillChange",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GhostDisplacementOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "GhostDisplacementIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bWallGhost",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "NormalOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "OcclusionStrength",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpDepthIn",
+      "type": "Texture2D<uint4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpGrip",
+      "type": "float",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bFirstStep",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpAnchorIn",
+      "type": "Texture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpAnchorOut",
+      "type": "RWTexture2D<float2>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpGroups",
+      "type": "StructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpSumsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpList",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpListCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "PresserTable",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpActiveTilesOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpActiveCountOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpActiveTiles",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpActiveCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpState",
+      "type": "RWStructuredBuffer<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpOut",
+      "type": "RWBuffer<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bLastStep",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpForceArgsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "LumpRegionOffsetOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileLinkPairsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileLinkPairCountOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileLinkPairs",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileLinkPairCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TilePressed",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileResidual",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileListOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileBitsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileReach",
+      "type": "int",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ArgsStride",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bDentParts",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bTileStats",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TilePartsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileParts",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "TileListArgsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ActivityIn",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "RestFrames",
+      "type": "RWStructuredBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ArgsOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "FullGroups",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "SettleStep",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "bResetRest",
+      "type": "uint",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CopyIn",
+      "type": "Texture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "CopyOut",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearStateA",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearDisplacement",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearPreviousDisplacement",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearNormal",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearAccepted",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearHold",
+      "type": "RWTexture2D<float>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearDrag",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "ClearDragHold",
+      "type": "RWTexture2D<float4>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatActivity",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatRest",
+      "type": "StructuredBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatTileCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatContactGroupCount",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatDragHeader",
+      "type": "Buffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    {
+      "name": "StatOut",
+      "type": "RWBuffer<uint>",
+      "file": "SoftbodySurfaceField.usf"
+    }
+  ],
+  "defines": {
+    "SB_ACTIVITY_DEEP": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ACTIVITY_LABEL_OVERFLOW": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ARGS_CLEAR": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ARGS_LISTED": {
+      "value": "0u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ARGS_LUMP": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ARGS_TILES": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_BEND_HOLD": {
+      "value": "16.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_CAP_SOFT_START": {
+      "value": "0.7",
+      "file": "SoftbodyKernel.ush"
+    },
+    "SB_COARSE_BUSY_ANY": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_BUSY_WIDE": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_CELLS": {
+      "value": "(SB_COARSE_GROUP * SB_COARSE_GROUP)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_CHUNK": {
+      "value": "64u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_GROUP": {
+      "value": "8u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_INDEX_THREADS": {
+      "value": "1024",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_MAX_BLOCK": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_NONE": {
+      "value": "-1e30",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_COARSE_TAU": {
+      "value": "5e-3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_CONTACT_REACH": {
+      "value": "3.7",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_CONTACT_ROW": {
+      "value": "256u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_CORE_FADE": {
+      "value": "0.5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_AREA": {
+      "value": "(SB_DENT_SIDE * SB_DENT_SIDE)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_BUSY": {
+      "value": "SB_DentBusy",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_CELLS": {
+      "value": "(SB_DENT_SIDE / SB_DENT_ROWS)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_HALO": {
+      "value": "8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_ITERATIONS": {
+      "value": "32u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_NO_FLOOR": {
+      "value": "SB_DentNoFloor",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_ROWS": {
+      "value": "8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DENT_SIDE": {
+      "value": "32",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_BOUND_TOL": {
+      "value": "1.03",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_CLUSTER_CHUNK": {
+      "value": "32u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_CLUSTER_ROWS": {
+      "value": "9u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_COMPACT": {
+      "value": "1.5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_COMPACT_BIT": {
+      "value": "0x80000000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_CORRECT_REL": {
+      "value": "1e-3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_COUNT_MASK": {
+      "value": "0xffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_CUT_MIN": {
+      "value": "4.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_EMPTY": {
+      "value": "0xffffffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_GATE_HI": {
+      "value": "0.5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_GATE_LO": {
+      "value": "0.3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_HALF_BIAS": {
+      "value": "0x0400u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_HALF_LIMIT": {
+      "value": "16000.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_HEADER_CLUSTERS": {
+      "value": "10u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_HEADER_LIVE": {
+      "value": "9u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_HEADER_REACH": {
+      "value": "7u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_INPUT_ROWS": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_NEAR_TILES": {
+      "value": "1.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_NEW_HALF_CELLS": {
+      "value": "2.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_PRESSED_BIT": {
+      "value": "0x80000000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_ROW_MASK": {
+      "value": "0x3fffffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_SEAM": {
+      "value": "0x80000000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_SLICES": {
+      "value": "1",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_SOURCE_ROWS": {
+      "value": "7u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_STAT_CORRECT": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_STAT_END": {
+      "value": "16u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_STAT_GATHER": {
+      "value": "10u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_STAT_MIXED": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_STAT_WORDS": {
+      "value": "6u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_STUCK_BIT": {
+      "value": "0x40000000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_TABLE_LOG0": {
+      "value": "(-3.5065579)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_TABLE_N": {
+      "value": "40",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_DRAG_TABLE_STEP": {
+      "value": "0.19489493",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_EDGE_RANGE": {
+      "value": "2.0",
+      "file": "SoftbodyFieldCommon.ush"
+    },
+    "SB_EDGE_SOFT": {
+      "value": "0.15",
+      "file": "SoftbodyFieldCommon.ush"
+    },
+    "SB_FIELD_DEEPEST_READS": {
+      "value": "4",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FIELD_EXIT_OVERLAP": {
+      "value": "0.125",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FIELD_EXIT_SPLITS": {
+      "value": "3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FIELD_MAX_STEPS": {
+      "value": "32",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FIELD_ROOM_STEPS": {
+      "value": "8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FIELD_ROWS": {
+      "value": "7",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FOLLOW_ALLOW": {
+      "value": "0.3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FOLLOW_SMALL": {
+      "value": "10.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_FOLLOW_STEEP": {
+      "value": "2.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_CLEAR": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_EMPTY": {
+      "value": "0u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_FACING": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_GRIP": {
+      "value": "4.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_GRIP_MAX": {
+      "value": "1e6",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_HELD": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_HOLD": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_INPUT_ROWS": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_MISSED": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_NEAR_WINDOWS": {
+      "value": "6.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_NORMAL_COS": {
+      "value": "0.5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_PLATE_FLEX": {
+      "value": "0.05",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_REASON_MISSED": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_REASON_RELEASED": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_RELEASING": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_ROWS": {
+      "value": "8u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_ROW_COMPLIANCE_MAX": {
+      "value": "1e4",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_ROW_GRIP": {
+      "value": "1e-3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_SEARCH": {
+      "value": "5.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRAB_STATE_ROWS": {
+      "value": "9u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRIP_DIR_SCALE": {
+      "value": "64.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GRIP_FACE_MIN_COS": {
+      "value": "0.25",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_GROUP_LUMP_NEAR": {
+      "value": "0x80000000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_BLACK_ELL": {
+      "value": "50.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_CANDIDATES": {
+      "value": "32u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_CG_STOP": {
+      "value": "1e-8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_DRAW_PLATE": {
+      "value": "0x8000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_HAND_CAP": {
+      "value": "256u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_HAND_EMIT": {
+      "value": "512u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_HAND_EPS": {
+      "value": "0.03",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_HAND_ROWS": {
+      "value": "17u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_HOLD": {
+      "value": "64.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_INV_CUT": {
+      "value": "1e-5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_PICK_DELTA": {
+      "value": "0.05",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_PICK_SETTLE": {
+      "value": "1e-4",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_PREFIX_CAP": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_RANK_RATIO": {
+      "value": "0.01",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_RANK_TINY": {
+      "value": "1e-6",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_RESTORE_CAP": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_ROUND_SCALE": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_SAMPLES": {
+      "value": "16u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_STEP_SCALE": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_SURFACE": {
+      "value": "0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_BITS": {
+      "value": "8u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_CANDIDATES": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_COUNT": {
+      "value": "200u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_FREE": {
+      "value": "6u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_FROWS": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_HANDS": {
+      "value": "0u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_OVERFLOW": {
+      "value": "5u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_PIECE": {
+      "value": "136u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_ROWS": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_START": {
+      "value": "168u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_TOUCHED": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HARD_WORK_WORDS": {
+      "value": "232u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HORIZON_DIRECTIONS": {
+      "value": "8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_HORIZON_SAMPLES": {
+      "value": "10",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ID_NEW": {
+      "value": "0x80u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_ID_NONE": {
+      "value": "127u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_INERTIA_ROWS_SHADING": {
+      "value": "7",
+      "file": "SoftbodyKernel.ush"
+    },
+    "SB_KIND_GHOST": {
+      "value": "2",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_KIND_OUTER_GHOST": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_KIND_SURFACE": {
+      "value": "1",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LABEL_ENTER_COS": {
+      "value": "0.5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LABEL_MARGIN": {
+      "value": "0.05",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LABEL_MOVE": {
+      "value": "1e-3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LABEL_TILT_STEP": {
+      "value": "0.2",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LANDMARK_MAX": {
+      "value": "128u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LANDMARK_NEAREST": {
+      "value": "16u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LANDMARK_NO_ROW": {
+      "value": "0xffffffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LANDMARK_TABLE_WIDTH": {
+      "value": "2048u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LANDMARK_UNIT": {
+      "value": "0.01",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LANDMARK_UNREACHABLE": {
+      "value": "0xffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LIST_ARGS_COARSE": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LIST_ARGS_COPY": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LIST_ARGS_FINE": {
+      "value": "0u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LIST_ARGS_PARTS": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LIST_ARGS_SINGLE": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LIST_THREADS": {
+      "value": "1024",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LONG_SLICES": {
+      "value": "8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_DIM": {
+      "value": "(SB_LUMP_MODES + 3)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_E": {
+      "value": "SB_LUMP_MODES",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_FAR": {
+      "value": "-10000.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_FORCE_PARTS": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_GROUPS": {
+      "value": "16",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_GROUP_ROWS": {
+      "value": "7",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_HESS": {
+      "value": "(SB_LUMP_DIM * (SB_LUMP_DIM + 1) / 2)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_MIN_THICKNESS": {
+      "value": "0.5",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_MODES": {
+      "value": "0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_OUTPUTS": {
+      "value": "16",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_PART_VALUES": {
+      "value": "((SB_LUMP_VALUES + SB_LUMP_FORCE_PARTS - 1u) / SB_LUMP_FORCE_PARTS)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_REGION": {
+      "value": "1",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_FLOATS": {
+      "value": "(3 * SB_LUMP_DIM + 10)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_G1": {
+      "value": "(3 * SB_LUMP_DIM + 5)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_G2": {
+      "value": "(3 * SB_LUMP_DIM + 6)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_GN": {
+      "value": "(3 * SB_LUMP_DIM + 1)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_MXX": {
+      "value": "(3 * SB_LUMP_DIM + 2)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_MXY": {
+      "value": "(3 * SB_LUMP_DIM + 3)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_MYY": {
+      "value": "(3 * SB_LUMP_DIM + 4)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_ONE": {
+      "value": "(3 * SB_LUMP_DIM + 8)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_W": {
+      "value": "(3 * SB_LUMP_DIM + 7)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_WN": {
+      "value": "(3 * SB_LUMP_DIM)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_ROW_ZERO": {
+      "value": "(3 * SB_LUMP_DIM + 9)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_SCALE": {
+      "value": "4096.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_SOLVE_THREADS": {
+      "value": "32u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_STATE_ROWS": {
+      "value": "30",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_STENCIL_MAX": {
+      "value": "8",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_VALUES": {
+      "value": "(SB_LUMP_DIM + SB_LUMP_HESS + 1)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_LUMP_VALUE_ENERGY": {
+      "value": "(SB_LUMP_VALUES - 1)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_MAX_FIELD_WORDS": {
+      "value": "16",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_MAX_GROUP_SHAPES": {
+      "value": "32",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_NEIGHBOR_BAND": {
+      "value": "4.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_NORMAL_STENCIL_LAYER": {
+      "value": "(1.0 / 16.0)",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_NORMAL_STENCIL_MAX": {
+      "value": "4",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_NO_OBSTACLE": {
+      "value": "-10000.0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_NO_WINNER": {
+      "value": "0xffffffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSER_LOCAL_SLOTS": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSER_TABLE_BASE": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSER_WORDS": {
+      "value": "5u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_AMOUNT_WORDS": {
+      "value": "SB_RESPONSE_AMOUNT_M",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_BLOCK": {
+      "value": "32u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_BOUND_TOL": {
+      "value": "1.03",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_CAP": {
+      "value": "768u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_CELL_SPREAD": {
+      "value": "0.35",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_GEOM_ROWS": {
+      "value": "7u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_HEADER_BEND": {
+      "value": "13u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_HEADER_COUNT": {
+      "value": "12u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_HEADER_LEVEL": {
+      "value": "11u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_HEADER_LEVEL1": {
+      "value": "9u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_HEADER_LEVEL2": {
+      "value": "10u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_HEADER_WORDS": {
+      "value": "16u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_LEVELS": {
+      "value": "3u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_LOCAL_ROW": {
+      "value": "12u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_NO_SLOT": {
+      "value": "1023u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_ROUND_CAP": {
+      "value": "PressureRounds",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_ROWS": {
+      "value": "13u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_SLICES_MAX": {
+      "value": "32u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_SOLVE_THREADS": {
+      "value": "1024u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_STEP_CAP": {
+      "value": "PressureSteps",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESSURE_UNROLL": {
+      "value": "8u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_PRESS_OVERSHOOT": {
+      "value": "1.3",
+      "file": "SoftbodyFieldCommon.ush"
+    },
+    "SB_REGION_EDGE_WEIGHT": {
+      "value": "0.1",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_REGION_MODES": {
+      "value": "16",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_REGION_RECORDS_PER_ROW": {
+      "value": "80",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_REGION_RECORD_TEXELS": {
+      "value": "13",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_RESIDUAL_DENT": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_RESIDUAL_HOLD": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_RESPONSE_AMOUNT_H": {
+      "value": "38",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_AMOUNT_LT": {
+      "value": "19",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_AMOUNT_M": {
+      "value": "20",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_AMOUNT_NU": {
+      "value": "9",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_BEND_COUNT": {
+      "value": "12",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_CRUSH_STRAIN": {
+      "value": "0.08",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_FULL_DELTA_COUNT": {
+      "value": "17",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_FULL_RHO_COUNT": {
+      "value": "512",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_RHO_COUNT": {
+      "value": "128",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_RHO_MAX": {
+      "value": "8.0",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_TAU_COUNT": {
+      "value": "9",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_V_COUNT": {
+      "value": "9",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESPONSE_WINDOW_MAX": {
+      "value": "2.049379",
+      "file": "SoftbodyContactResponse.ush"
+    },
+    "SB_RESTED": {
+      "value": "0x7fffffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_REST_EPSILON": {
+      "value": "1e-4",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SEPARATION": {
+      "value": "0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SETTLED": {
+      "value": "0x1000000u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SHAPE_BOX": {
+      "value": "2",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SHAPE_CAPSULE": {
+      "value": "1",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SHAPE_CONVEX": {
+      "value": "3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SHAPE_SPHERE": {
+      "value": "0",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SOURCE_HEADER_COUNT": {
+      "value": "0u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SOURCE_HEADER_MAX": {
+      "value": "4u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SOURCE_HEADER_MIN": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SOURCE_HEADER_OVERFLOW": {
+      "value": "8u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SOURCE_HEADER_SIGMA": {
+      "value": "7u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SOURCE_HEADER_WORDS": {
+      "value": "12u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_SQUEEZE_REACH": {
+      "value": "3",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_STILL_CHANGED": {
+      "value": "2u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_STILL_PRESSED": {
+      "value": "1u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE": {
+      "value": "16",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_ALWAYS": {
+      "value": "0xffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_COUNT_PARTS": {
+      "value": "17u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_COUNT_STILL": {
+      "value": "16u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_COUNT_WHY": {
+      "value": "18u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_COUNT_WORDS": {
+      "value": "24u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_LINKS": {
+      "value": "32",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_NO_LINK": {
+      "value": "0xffffffffu",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_ROW": {
+      "value": "256u",
+      "file": "SoftbodySurfaceField.usf"
+    },
+    "SB_TILE_WORDS_MAX": {
+      "value": "512",
+      "file": "SoftbodySurfaceField.usf"
+    }
+  }
+}

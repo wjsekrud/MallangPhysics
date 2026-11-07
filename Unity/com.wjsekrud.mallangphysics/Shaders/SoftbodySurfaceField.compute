@@ -1,0 +1,80 @@
+// Softbody 표면 장 컴퓨트 셰이더 — Basic 자산(Contact Detail Basic·Full 모두 도는 커널 27개: 접촉·함몰·덩어리·합치기·노멀·쉬기).
+// 커널 본문은 Shared/SoftbodySurfaceField.hlsl(UE SoftbodySurfaceField.usf 사본, Tools/sync_shared_shaders.py가 만든다)에 있고, 이 파일에는 커널 목록만 둔다.
+// Full 전용 커널(접촉 압력 풀이 솟음·끌림 8개)은 SoftbodySurfaceFieldFull.compute에 따로 둔다(규약 20 §6 Q1): Full 커널의 컴파일 실패·느림이 Basic을
+// 막지 않고, Full 지원 판정이 자산 단위로 갈린다. 대가로 스칼라($Globals)가 자산마다 따로라 Full 패스는 스칼라를 Full 자산에 한 번 더 넣는다.
+// 원본에 커널이 늘거나 줄면 동기화 스크립트가 알린다(--check는 이 목록이 원본·Basic/Full 나눔과 다르면 실패).
+// 커널 줄 꼴: `#pragma kernel 이름 매크로=값…` — 매크로는 그 커널을 컴파일할 때만 붙는다(UE 순열을 키워드 없이 내는 꼴).
+//   CoarseInitCS SB_HARD_SURFACE=1 : UE가 이 커널만 늘 하드 서피스 순열로 컴파일한다(조각 읽기를 쓰는 함수가 있어 0으로는 컴파일되지 않는다).
+//   그 밖의 커널은 순열 0(SB_HARD_SURFACE·SB_SEPARATION 0, 원본 #ifndef 기본값). SB_LUMP_REGION은 정의하지 않아 원본 기본값 1(큰 판 하나)이다.
+// 하드 서피스·부위 나누기 런타임을 넣을 때는 별칭 커널(매크로로 함수 이름을 바꿔 같은 함수를 다른 순열로 한 번 더 낸 커널)을 더한다 —
+//   `#pragma kernel ContactCS_H ContactCS=ContactCS_H SB_HARD_SURFACE=1` (접미 _H 하드 서피스, _S 부위 나누기, _SH 둘 다 — 규약 20 §2.1 ②).
+// 순서는 원본에 나오는 순서다 — C#은 순서(커널 번호)에 기대지 말고 FindKernel(이름)으로 찾는다.
+#pragma kernel ContactCS
+#pragma kernel ContactGroupsCS
+#pragma kernel DentCS
+#pragma kernel DentCoarseAddCS
+#pragma kernel DentCopyCS
+#pragma kernel CarrierKindCS
+#pragma kernel CoarseInitCS SB_HARD_SURFACE=1
+#pragma kernel CoarseRowCS
+#pragma kernel CoarseMaterialCS
+#pragma kernel DragLinksCS
+#pragma kernel DentCoarseRestrictCS
+#pragma kernel DentCoarseCS
+#pragma kernel ComposeCS
+#pragma kernel GhostGatherCS
+#pragma kernel GhostApplyCS
+#pragma kernel NormalCS
+#pragma kernel LumpActiveCS
+#pragma kernel LumpForceCS
+#pragma kernel LumpStartCS
+#pragma kernel LumpSolveCS
+#pragma kernel LumpRegionCS
+#pragma kernel TileLinksCS
+#pragma kernel TileListCS
+#pragma kernel ActivityArgsCS
+#pragma kernel CopyCS
+#pragma kernel ClearCS
+#pragma kernel StatsCS
+// r4-sep begin
+// 부위 나누기(Separated Pairs) 함몰 채널 순열(DentCS_S·DentCS_SH)은 이 FXC판에 넣지 않는다 — DXC판(D3D12·Vulkan)에만 있다. FXC로 DentCS_S 하나가
+// 731 s 걸려(DentCS 257 s, 2026-11-06 fxc cs_5_0 측정) Unity 셰이더 컴파일러 기본 시간 한도를 넘어 임포트가 실패했고, 둘이면 이 자산 임포트가 20분
+// 넘게 늘었다. D3D11·Metal에서는 커널이 없어 부위 나누기가 꺼진다(SurfaceFieldKernels.bSeparationSupported — 함몰은 부위 몫 없는 장과 같이 돈다). 규약 44 §4.
+// r4-sep end
+
+// r4-hard begin
+// 하드 서피스 순열(_H = SB_HARD_SURFACE 1, UE FSoftbodyHardSurfaceDim): Flex 칠로 구운 조각(판)이 있거나 연속 굽힘만 도는 장이 고른다
+// (C# SurfaceFieldHardKernels·SurfaceFieldPasses.Hard.cs). 접촉·목록·합치기는 조각 순열이면 Basic에서도, 함몰 셋은 Full에서만(UE HardMode).
+// 부위 나누기와 같이 켜진 함몰 판(DentCS_SH)은 DXC판의 r4-sep 블록에만 있다(이 FXC판에는 없다 — 위 r4-sep 주석).
+#pragma kernel ContactCS_H ContactCS=ContactCS_H SB_HARD_SURFACE=1
+#pragma kernel DentCS_H DentCS=DentCS_H SB_HARD_SURFACE=1
+#pragma kernel DentCoarseRestrictCS_H DentCoarseRestrictCS=DentCoarseRestrictCS_H SB_HARD_SURFACE=1
+#pragma kernel DentCoarseCS_H DentCoarseCS=DentCoarseCS_H SB_HARD_SURFACE=1
+#pragma kernel ComposeCS_H ComposeCS=ComposeCS_H SB_HARD_SURFACE=1
+#pragma kernel TileListCS_H TileListCS=TileListCS_H SB_HARD_SURFACE=1
+// r4-hard end
+
+// 대상 그래픽 API(d3d11 = D3D11과 D3D12 둘 다). 그 밖의 API(GLES·WebGPU 등)에서는 이 셰이더가 만들어지지 않고 커널이 지원되지 않는
+// 것으로 보인다 → 런타임이 접촉을 끈다.
+// 이 파일은 FXC로 컴파일하는 판이고 D3D11·Metal이 쓴다. D3D12·Vulkan은 같은 커널을 DXC로 컴파일한 SoftbodySurfaceFieldDxc.compute를 쓴다
+// (D-60·D-64 — 런타임이 장치를 보고 고른다, SoftbodyRuntimeResources.SurfaceField). D3D12는 DXC판이 없으면 이 판으로 돈다(느릴 뿐 값은 같다).
+// Vulkan에는 이 판을 만들지 않는다(D-64): FXC 바이트코드를 Unity가 SPIR-V로 옮기는 길에서 덩어리 풀이(LumpSolveCS)가 GPU를 2초 넘게 묶어 드라이버가
+// 재설정됐고(FXC가 그 고리에 "infinite loop detected" 경고를 낸다, 2026-11-04), 처음 쓸 때 컴파일도 569 s였다(DXC판 약 10 s).
+// 이 파일에 `#pragma use_dxc`를 넣지 않는다 — Unity 6.3은 D3D11까지 DXC로 만들어 D3D11에서 커널이 조용히 돌지 않는다(D-60).
+#pragma only_renderers d3d11 metal
+
+// 응답 표 샘플러(원본 `SamplerState ContactResponseSampler;`): Unity 컴퓨트는 샘플러 이름이 sampler<텍스처>이거나 필터·랩 낱말이 든 인라인 이름이어야
+// 묶는다(규약 10 §6.5). 공유 사본은 고치지 않고 include 앞에서 이름만 바꾼다 — 세 겹 선형·가장자리 고정(UE GetLongSampler와 같은 뜻, 표에 밉이 없어
+// Linear와 같다). 유니티 머티리얼(Shaders/Include/SoftbodyMaterial.hlsl)도 같은 인라인 이름을 쓴다. C#은 이 샘플러를 묶지 않는다(규약 20 §2.1 ①).
+#define ContactResponseSampler sampler_LinearClamp
+
+// 원본의 타입 버퍼(Buffer<uint>·RWBuffer<uint>·RWBuffer<float>)를 구조화 버퍼로 읽는다. C#은 모든 버퍼를 GraphicsBuffer.Target.Structured
+// (간접 인자는 Structured | IndirectArguments)로 만든다. 원본은 타입 버퍼를 [] 첨자로만 쓴다(2026-10-17 확인). 버퍼에 GetDimensions를
+// 쓰기 시작하면(구조화 버퍼는 인자가 둘이다) 이 매크로가 깨지니 동기화 뒤 컴파일로 확인한다.
+// 이 두 줄, 위 샘플러 줄, only_renderers·use_dxc 줄은 Tools/sync_shared_shaders.py --check가 있는지 본다.
+#define Buffer StructuredBuffer
+#define RWBuffer RWStructuredBuffer
+
+// Packages/… 경로로 include한다: 상대 경로("Shared/…")로 넣으면 Unity가 메시지의 파일 경로를 디스크 절대 경로로 적고 프로젝트
+// 경로의 빈칸("Unity Projects")에서 잘라 "Projects/SoftbodyUnity/…"로 보인다. 패키지 이름을 바꾸면 이 줄도 바꾼다.
+#include "Packages/com.wjsekrud.mallangphysics/Shaders/Shared/SoftbodySurfaceField.hlsl"

@@ -1,0 +1,76 @@
+/* 말랑한 분홍. 밝은 화면 글자 대비 5.1, 어두운 화면 7.3 */
+:root {
+  --vp-c-brand-1: #c4366d;
+  --vp-c-brand-2: #b8336a;
+  --vp-c-brand-3: #c4366d;
+  --vp-c-brand-soft: rgba(196, 54, 109, 0.14);
+
+  /* 분홍은 누를 수 있는 것에만 쓴다. 코드 글자는 본문 색 */
+  --vp-code-color: var(--vp-c-text-1);
+}
+
+.dark {
+  --vp-c-brand-1: #f08aa8;
+  --vp-c-brand-2: #ee7fa3;
+  --vp-c-brand-3: #c4366d;
+  --vp-c-brand-soft: rgba(240, 138, 168, 0.16);
+}
+
+/* 한국어 쪽은 Pretendard. 영어 낱말도 같은 글꼴로 그려서 한 문장 안에서 글꼴이 섞이지 않는다 */
+:root:where(:lang(ko)) {
+  --vp-font-family-base: 'Pretendard Variable', Pretendard, 'Inter', ui-sans-serif, system-ui,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+::selection { background-color: rgba(196, 54, 109, 0.22); }
+.dark ::selection { background-color: rgba(240, 138, 168, 0.3); }
+
+/* 문단 끝에 낱말 하나만 남는 줄을 줄이고, 제목 줄은 길이를 고르게 */
+.vp-doc p,
+.vp-doc li { text-wrap: pretty; }
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPHero .text,
+.VPHero .tagline,
+.VPFeature .title { text-wrap: balance; }
+
+/* 표가 넓은 쪽(설정표)은 글자를 조금 줄여 가로 스크롤을 덜 낸다 */
+.vp-doc table { font-size: 14px; }
+
+/* 문제 해결 표처럼 첫 칸이 로그 메시지인 표는 그 칸을 넓혀 메시지가 두세 낱말씩 끊기지 않게 */
+.vp-doc td:first-child:has(> code:first-child) { min-width: 17em; }
+
+.vp-doc img { border-radius: 8px; }
+
+/* 첫 화면 기능 카드: 제목과 본문의 크기 차이를 분명하게 */
+.VPFeature .title {
+  font-size: 20px;
+  line-height: 28px;
+}
+.VPFeature .details {
+  font-size: 15px;
+  line-height: 26px;
+}
+
+/* 한국어는 낱말 가운데서 줄을 바꾸지 않는다. 긴 영어 이름은 넘칠 때만 끊는다 */
+:lang(ko) .vp-doc,
+:lang(ko) .VPHero,
+:lang(ko) .VPFeatures,
+:lang(ko) .HomeFeatures {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* 사이드바가 창 높이를 넘을 때 본문과 사이드바 사이에 스크롤바가 하나 더 생기지 않게 막대만 숨긴다(휠·터치 스크롤은 그대로). */
+.VPSidebar {
+  scrollbar-width: none;
+}
+.VPSidebar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 첫 화면은 Features 띠가 맨 아래 링크 묶음에 바로 닿게 */
+.VPHome:has(.HomeFeatures) {
+  margin-bottom: 0 !important;
+}

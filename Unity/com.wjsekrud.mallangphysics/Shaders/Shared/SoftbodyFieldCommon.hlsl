@@ -1,0 +1,226 @@
+// [sync_shared_shaders] 자동 생성 사본 — 손으로 고치지 마라. Tools/sync_shared_shaders.py가 UE 원본에서 #include 줄만 바꿔 복사한다.
+// [sync_shared_shaders] 원본: Plugins/SoftbodySystem/Shaders/SoftbodyFieldCommon.ush
+// [sync_shared_shaders] 원본 SHA-256(줄 끝 LF 기준): 452b17f8b54c10a6e99ded2442f385d635970a6cf9272fc8e9ddccf9a8988043
+// [sync_shared_shaders] 원본 git blob SHA-1(git hash-object): 63b2da440e529a873ba9dadfd4f366b56ec7a1c1
+#ifndef SB_SHARED_SOFTBODYFIELDCOMMON_HLSL
+#define SB_SHARED_SOFTBODYFIELDCOMMON_HLSL
+#line 1
+// 소프트바디 머티리얼 커널·표면 장 셰이더가 함께 쓰는 작은 함수들.
+// 소프트 상한은 CPU의 SoftbodyInertiaRuntime::SoftLimit과 같은 식이다(SoftbodyInertiaRuntimeTests.cpp가 검사).
+#pragma once
+
+// [0,1]에서 단조 감소하고 경계에서 값/1차/2차 미분이 0인 Wendland C2 지지 함수. 1 밖에서 정확히 0이다.
+float SB_CompactC2(float NormalizedDistance)
+{
+    float Q = saturate(NormalizedDistance);
+    float OneMinusQ = 1.0 - Q;
+    float W = OneMinusQ * OneMinusQ;
+    W *= W;
+    return NormalizedDistance < 1.0 ? W * (1.0 + 4.0 * Q) : 0.0;
+}
+
+// ADR-0003 표면 장: 렌더 정점이 캐리어(몸의 바깥 봉투)를 따라가는 정도. 봉투까지 거리가 AttachRange의
+// 절반 안이면 1, AttachRange에서 0으로 부드럽게 줄어든다(봉투에서 멀리 뜬 머리카락 카드·장식 보호).
+float SB_SurfaceAttachWeight(float EnvelopeDistance, float AttachRange)
+{
+    return SB_CompactC2(saturate(abs(EnvelopeDistance) / max(AttachRange, 1e-3) * 2.0 - 1.0));
+}
+
+// 눌리는 정도 칠(페인트 G)이 0인 정점은 표면 장을 따르지 않는다(0 또는 1). 칠의 크기는 여기서 곱하지 않는다: 캐리어 굽기가 그
+// 자리 살 두께에 곱해 두어(ADR-0016 §5) 얇게 칠한 살이 덜 눌리고 덜 솟고 덜 끌리는 것은 표면 장 풀이에서 이미 나온다. 0인 정점만
+// 떼는 까닭은 칠한 경계의 정점이 정확히 제자리에 남아야 해서다 — 소프트바디가 아닌 이웃 메시(머리, 손)와 틈이 벌어지지 않는다.
+float SB_SurfaceFleshGate(float PaintGain)
+{
+    return PaintGain > 0.0 ? 1.0 : 0.0;
+}
+
+// 소프트 상한. 상한 L의 SoftStart 비율(K)까지는 X 그대로, [K, 2L-K]에서 기울기가 연속인 곡선
+// h = K + (L-K)(2t - t²)로 L에 수렴, 그 밖은 L.
+float SB_SoftLimit(float X, float Limit, float SoftStart)
+{
+    if (Limit <= 0.0 || X <= 0.0)
+    {
+        return 0.0;
+    }
+    float K = saturate(SoftStart) * Limit;
+    if (X <= K)
+    {
+        return X;
+    }
+    float Span = Limit - K;
+    if (Span <= 1e-6)
+    {
+        return Limit;
+    }
+    float T = min((X - K) / (2.0 * Span), 1.0);
+    return K + Span * (2.0 * T - T * T);
+}
+
+// 누른 깊이의 상한(원칙 P06·일지 295). Exact까지는 그대로, 그 너머는 기울기가 이어지게 휘어 SB_PRESS_OVERSHOOT × Exact에 붙는다(누름 1.6 × Exact에서).
+// 살 두께에 거는 것은 응답(압력·끌림 힘)의 입력뿐이다 — 피부 자리 깊이는 Max Contact Depth에만 건다(일지 299, 피부가 콜라이더 면까지 따라간다).
+// 예외: 자기 몸 부위(셀프 컨택트)의 깊이는 살 두께에도 건다(일지 324, SB_FieldDepth).
+#define SB_PRESS_OVERSHOOT 1.3
+float SB_PressLimit(float X, float Exact)
+{
+    return SB_SoftLimit(X, SB_PRESS_OVERSHOOT * Exact, 1.0 / SB_PRESS_OVERSHOOT);
+}
+
+// 함몰 벽을 칸 사이에서 세우기(ADR-0029): 표면 장 변위 텍스처의 A = 콜라이더 가장자리까지 부호 거리(칸 수, 눌린 안쪽이 +)
+// + SB_EDGE_RANGE. 거리는 ±SB_EDGE_RANGE에서 자른다 — 지운 텍스처와 빈칸(A = 0)은 멀리 바깥이다. 접촉 패스가 재고 합치기 패스가
+// 적으며, 나나이트 쪼갠 점이 가장자리 가까이에서 벽을 실제 가장자리 선 위에 세운다(SoftbodyTessellationDisplacement → 아래 SB_EdgeWallBlend).
+#define SB_EDGE_RANGE 2.0
+// 벽 없음 양(ADR-0035): 표시가 담을 수 없는 벽을 얼마나 풀까(0 = 세운다, 1 = 보통 보간). 벽 몫이 낮은 떠오르는 가장자리(접촉 패스)와
+// 좁은 틈·섬(합치기 패스)에서 연속으로 커진다. 가장자리 값과 같은 반정밀 채널 하나(접촉의 Edge, 변위 A)에 묶는다:
+// 값 = SB_EDGE_RANGE + s(1/32칸 단위) + k(15단계)/512. 값이 0~4라 반정밀 간격(2~4에서 1/512)에 그대로 들어가고, 쌍선형으로 읽은
+// 값은 k 몫이 0.03칸 이하라 가장자리 거리로 그대로 쓴다. 띠 밖(|s| = SB_EDGE_RANGE)은 k를 담지 않는다(4 너머는 간격이 1/256).
+// s는 부호를 지켜 반올림한다(눌린 안 s > 0은 1/32칸 이상): 0으로 반올림된 안쪽 칸이 바깥으로 뒤집히면 벽이 그 칸 가운데를 지나
+// 쪼갠 점의 같은 쪽 섞기가 칸 묶음 경계에서 끊긴다(일지 244에서 잼).
+float SB_PackEdge(float S, float K)
+{
+	float Q = round(clamp(S, -SB_EDGE_RANGE, SB_EDGE_RANGE) * 32.0);
+	Q = S > 0.0 ? max(Q, 1.0) : min(Q, 0.0);
+	float N = abs(Q) < SB_EDGE_RANGE * 32.0 ? round(saturate(K) * 15.0) : 0.0;
+	return SB_EDGE_RANGE + (Q * 16.0 + N) / 512.0;
+}
+
+float4 SB_UnpackEdgeK(float4 A, out float4 S)
+{
+	float4 Q = round(max(A, 0.0) * 512.0);
+	float4 N = Q - 16.0 * floor(Q / 16.0);
+	S = (Q - N) / 512.0 - SB_EDGE_RANGE;
+	return N / 15.0;
+}
+
+float SB_UnpackEdge(float A, out float S)
+{
+	float4 S4;
+	float4 K = SB_UnpackEdgeK(float4(A, 0, 0, 0), S4);
+	S = S4.x;
+	return K.x;
+}
+
+// 함몰 벽을 그리는 규칙(ADR-0029, 일지 359) — 머티리얼의 나나이트 쪼갠 점(SB_EdgeSideField)과 옷 밑 피부 칸 베끼기(SB_GhostFinalAt)가 같이 쓴다.
+// 벽은 가장자리 부호 거리 s = 0 선에 선다: 그 선 안쪽은 눌린 안(s > 0) 칸들의 값, 바깥쪽은 바깥 칸들의 값으로 그리고, 선 둘레
+// ±SB_EDGE_SOFT칸에서 둘을 잇는다. 둘레 2x2 칸 가운데 건너편 쪽 칸 자리에는 그 칸의 값 대신 "이쪽 살을 그 칸까지 이어 본 값"을 쓴다.
+// 이어 본 값 = 둘레 4x4 칸 가운데 이쪽 칸들로 맞춘 s에 대한 직선(쪼갠 점에서 2칸까지 줄어드는 무게)을 그 칸의 s에서 읽은 값.
+// 전에는 이쪽 칸들의 평균만 써서, 가파른 비탈이 벽에 닿는 곳(손 둘레)에서 벽 턱 높이가 벽선이 칸 격자를 지나는 자리마다 달랐다
+// (손이 움직이면 톱날처럼 자글거림, 일지 358). 이어 본 값은 이쪽 평균에서 그 칸의 실제 값만큼까지만 벗어난다 — 벽 턱이 칸 값이
+// 말하는 것보다 높아지거나 뒤집히지 않고, 살이 벽에서 끊기지 않고 이어지는 곳은 턱이 사라진다. 진짜 턱(평평한 바닥의 깊은 누름)은
+// 기울기가 0이라 그대로 선다. 무게가 쪼갠 점 위치를 따라 끊김 없이 바뀌므로 그린 면도 끊기지 않는다.
+// 이어 읽기(SB_EdgeWallBlend, 칸 16개)는 Contact Detail Full에서만 쓴다. Basic은 이쪽 평균만 쓰는 전 규칙(SB_EdgeSameSideBlend, 칸 4개)이다
+// (일지 361, 사용자 결정).
+#define SB_EDGE_SOFT 0.15
+
+// 이쪽 칸들의 무게 합(SumW = Σw, SumS = Σws, SumSS = Σws², SumV = Σwv, SumSV = Σwsv)으로 이쪽 살을 건너편 칸의 s 자리까지 이어 본 값.
+// Own = 그 칸의 실제 값. 이쪽 칸이 없으면(SumW → 0) Own.
+float3 SB_WallGhost(float SumW, float SumS, float SumSS, float3 SumV, float3 SumSV, float3 Own, float S)
+{
+	float MeanS = SumS / max(SumW, 1e-6);
+	float3 MeanV = SumV / max(SumW, 1e-6);
+	float Var = max(SumSS - SumS * MeanS, 0.0);
+	// s가 고르게 퍼져 있지 않으면(무게 평균 분산 0.01~0.04칸²) 기울기를 믿지 않고 평균으로.
+	float3 Slope = (SumSV - MeanS * SumV) / max(Var, 1e-6) * smoothstep(0.01, 0.04, Var / max(SumW, 1e-6));
+	float3 Reach = abs(Own - MeanV);
+	float3 Ghost = MeanV + clamp(Slope * (S - MeanS), -Reach, Reach);
+	return lerp(Own, Ghost, smoothstep(0.0, 0.1, SumW));
+}
+
+// V = 쪼갠 점 둘레 4x4 칸의 변위(rgb)·가장자리(A, SB_PackEdge), 줄 우선이고 [5]가 쪼갠 점의 floor 칸. Use = 칸을 쓸지(캐리어 밖 0).
+// F = 쪼갠 점의 칸 안 자리(0~1, 칸 가운데 기준). Coverage = 가운데 2x2 가운데 쓸 수 있는 칸의 쌍선형 무게 합(0이면 결과 없음).
+// 벽 없음 양(ADR-0035): 벽은 안쪽 칸과 바깥 칸 사이에 서므로, 양쪽 칸들의 양(쌍선형 무게로 고른 값) 가운데 큰 쪽만큼 벽을 보통
+// 쌍선형으로 푼다.
+float3 SB_EdgeWallBlend(float4 V[16], float Use[16], float2 F, out float Coverage)
+{
+	float InW = 0.0, InS = 0.0, InSS = 0.0, OutW = 0.0, OutS = 0.0, OutSS = 0.0;
+	float3 InV = float3(0, 0, 0), InSV = float3(0, 0, 0), OutV = float3(0, 0, 0), OutSV = float3(0, 0, 0);
+	float4 CenterS = float4(0, 0, 0, 0);
+	float4 CenterK = float4(0, 0, 0, 0);
+	[unroll]
+	for (int i = 0; i < 16; ++i)
+	{
+		float S;
+		float K = SB_UnpackEdge(V[i].a, S);
+		float2 D = abs(float2(i & 3, i >> 2) - 1.0 - F);
+		float W = Use[i] * saturate(1.0 - 0.5 * D.x) * saturate(1.0 - 0.5 * D.y);
+		float CellIn = S > 0.0 ? W : 0.0;
+		float CellOut = W - CellIn;
+		InW += CellIn;
+		InS += CellIn * S;
+		InSS += CellIn * S * S;
+		InV += CellIn * V[i].rgb;
+		InSV += CellIn * S * V[i].rgb;
+		OutW += CellOut;
+		OutS += CellOut * S;
+		OutSS += CellOut * S * S;
+		OutV += CellOut * V[i].rgb;
+		OutSV += CellOut * S * V[i].rgb;
+		if (i == 5 || i == 6 || i == 9 || i == 10)
+		{
+			int C = ((i >> 2) - 1) * 2 + (i & 3) - 1;   // 가운데 2x2 차례(쌍선형 무게 B와 같은 순서)
+			CenterS[C] = S;
+			CenterK[C] = K;
+		}
+	}
+	float4 B = float4((1.0 - F.x) * (1.0 - F.y), F.x * (1.0 - F.y), (1.0 - F.x) * F.y, F.x * F.y) * float4(Use[5], Use[6], Use[9], Use[10]);
+	Coverage = dot(B, float4(1, 1, 1, 1));
+	B /= max(Coverage, 1e-6);
+	float3 Inside = float3(0, 0, 0);
+	float3 Outside = float3(0, 0, 0);
+	float3 Plain = float3(0, 0, 0);
+	[unroll]
+	for (int c = 0; c < 4; ++c)
+	{
+		float3 Own = V[5 + (c & 1) + (c >> 1) * 4].rgb;
+		bool bInner = CenterS[c] > 0.0;
+		Inside += B[c] * (bInner ? Own : SB_WallGhost(InW, InS, InSS, InV, InSV, Own, CenterS[c]));
+		Outside += B[c] * (bInner ? SB_WallGhost(OutW, OutS, OutSS, OutV, OutSV, Own, CenterS[c]) : Own);
+		Plain += B[c] * Own;
+	}
+	float3 Stepped = lerp(Outside, Inside, smoothstep(-SB_EDGE_SOFT, SB_EDGE_SOFT, dot(B, CenterS)));
+	float4 BIn = B * float4(CenterS > 0.0);
+	float4 BOut = B - BIn;
+	float WIn = dot(BIn, float4(1, 1, 1, 1));
+	float WOut = dot(BOut, float4(1, 1, 1, 1));
+	float NoWallHere = max(WIn > 1e-4 ? dot(BIn, CenterK) / WIn : 0.0, WOut > 1e-4 ? dot(BOut, CenterK) / WOut : 0.0);
+	return lerp(Stepped, Plain, NoWallHere);
+}
+
+// Basic의 벽 규칙(일지 359 전과 같음): 둘레 2x2 칸 V(차례 00·10·01·11)와 쌍선형 무게 B(합 1). 벽 안쪽은 눌린 안 칸들만, 바깥쪽은 바깥
+// 칸들만 무게를 다시 나눠 섞는다 — 건너편 칸 자리가 이쪽 평균이라, 가파른 비탈이 벽에 닿는 곳에서는 벽 턱 높이가 칸 위상을 따라 흔들린다.
+// 한쪽에 칸이 없으면 다른 쪽 값. 벽 없음 양은 SB_EdgeWallBlend와 같다.
+float3 SB_EdgeSameSideBlend(float4 V[4], float4 B)
+{
+	float4 Edge;
+	float4 NoWall = SB_UnpackEdgeK(float4(V[0].a, V[1].a, V[2].a, V[3].a), Edge);
+	float4 BIn = B * float4(Edge > 0.0);
+	float4 BOut = B - BIn;
+	float WIn = dot(BIn, float4(1, 1, 1, 1));
+	float WOut = dot(BOut, float4(1, 1, 1, 1));
+	float3 Inside = (BIn.x * V[0].rgb + BIn.y * V[1].rgb + BIn.z * V[2].rgb + BIn.w * V[3].rgb) / max(WIn, 1e-6);
+	float3 Outside = (BOut.x * V[0].rgb + BOut.y * V[1].rgb + BOut.z * V[2].rgb + BOut.w * V[3].rgb) / max(WOut, 1e-6);
+	Inside = WIn > 1e-4 ? Inside : Outside;
+	Outside = WOut > 1e-4 ? Outside : Inside;
+	float3 Stepped = lerp(Outside, Inside, smoothstep(-SB_EDGE_SOFT, SB_EDGE_SOFT, dot(B, Edge)));
+	float3 Plain = B.x * V[0].rgb + B.y * V[1].rgb + B.z * V[2].rgb + B.w * V[3].rgb;
+	float NoWallHere = max(WIn > 1e-4 ? dot(BIn, NoWall) / WIn : 0.0, WOut > 1e-4 ? dot(BOut, NoWall) / WOut : 0.0);
+	return lerp(Stepped, Plain, NoWallHere);
+}
+
+// 최종 변위 벡터의 길이 상한(수치 안전장). 소프트 상한으로 Limit에 붙는다.
+float3 SB_SmoothCap(float3 V, float Limit, float SoftStart)
+{
+    if (Limit <= 1e-5)
+    {
+        return float3(0.0, 0.0, 0.0);
+    }
+    float L = length(V);
+    float Capped = SB_SoftLimit(L, Limit, SoftStart);
+    return L > Capped ? V * (Capped / max(L, 1e-5)) : V;
+}
+
+// 관성 브릿지 텍셀 (X, Y) 하나 (SoftbodyComponent::BridgeWidth 주석의 배치).
+float4 SB_LoadContact(Texture2D ContactData, int X, int Y)
+{
+    return ContactData.Load(int3(X, Y, 0));
+}
+#endif // [sync_shared_shaders] SB_SHARED_SOFTBODYFIELDCOMMON_HLSL

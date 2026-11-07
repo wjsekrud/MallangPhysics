@@ -1,0 +1,45 @@
+// Softbody 표면 장 컴퓨트 셰이더 — Full 자산(Contact Detail Full에서만 도는 커널 17개 — 함수 8 + 순열 별칭 9: 접촉 압력 풀이 솟음 ADR-0037, 끌림 ADR-0008·ADR-0033).
+// 커널 본문은 Basic 자산과 같은 Shared/SoftbodySurfaceField.hlsl이다. Basic 자산(SoftbodySurfaceField.compute)과 나눈 까닭은 그 파일 머리 주석
+// (규약 20 §6 Q1): 이 자산의 커널이 컴파일되지 않거나 지원되지 않는 장치에서는 Full만 꺼지고 Basic은 돈다(런타임 SupportsFullDetail).
+// 스칼라($Globals)와 바인딩은 자산마다 따로 남는다 — Full 패스는 그 커널이 읽는 모든 값을 이 자산에 다시 넣는다(D-24b).
+// 커널 줄 꼴과 순열 별칭은 아래 r4-pressure 블록 머리 주석.
+// 순서는 원본에 나오는 순서다 — C#은 순서(커널 번호)에 기대지 말고 FindKernel(이름)으로 찾는다.
+// r4-pressure begin
+// Full 커널 17줄(접촉 압력 풀이 ADR-0037·끌림 ADR-0033). 별칭 줄 꼴: `<기본>_<접미> <기본>=<기본>_<접미> <순열 매크로>` — 같은 함수를 매크로로 이름만 바꿔
+// 다른 순열로 한 번 더 낸다(접미 _S 부위 나누기 SB_SEPARATION=1, _H 하드 서피스 SB_HARD_SURFACE=1, _SH 둘 다 — 규약 20 §2.1 ②). 원본에 그 순열 갈래가 있는 커널만
+// 별칭을 둔다(칸 목록·긴 몫 모으기 넷, 인자·풀이 둘). 행렬·끌림 셋은 갈래가 없어 한 판으로 모든 순열에 쓴다(UE도 본문이 같다).
+//   ContactPressureArgsCS: 원본이 #if SB_HARD_SURFACE 갈래마다 따로 정의한다 — 순열 0은 묶음 (1,1,1), _H는 (256,1,1)(후보 조각 고르기).
+//   ContactPressurePiecesCS: 하드 서피스 펼치기, 함수가 #if SB_HARD_SURFACE 안에만 있어 늘 SB_HARD_SURFACE=1.
+//   DragCorrectCS·DragGatherCS SB_DRAG_SLICES=4: 끌림 묶음(거친 칸 8×8)의 걸음을 조각 넷으로 나눈 판(UE softbody.Drag.Slices 기본 4, 묶음 (8,8,4)).
+#pragma kernel ContactPressureCellsCS
+#pragma kernel ContactPressureCellsCS_S ContactPressureCellsCS=ContactPressureCellsCS_S SB_SEPARATION=1
+#pragma kernel ContactPressureCellsCS_H ContactPressureCellsCS=ContactPressureCellsCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactPressureCellsCS_SH ContactPressureCellsCS=ContactPressureCellsCS_SH SB_SEPARATION=1 SB_HARD_SURFACE=1
+#pragma kernel ContactPressureArgsCS
+#pragma kernel ContactPressureArgsCS_H ContactPressureArgsCS=ContactPressureArgsCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactPressurePiecesCS SB_HARD_SURFACE=1
+#pragma kernel ContactPressureMatrixCS
+#pragma kernel ContactPressureSolveCS
+#pragma kernel ContactPressureSolveCS_H ContactPressureSolveCS=ContactPressureSolveCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactLongGatherCS
+#pragma kernel ContactLongGatherCS_S ContactLongGatherCS=ContactLongGatherCS_S SB_SEPARATION=1
+#pragma kernel ContactLongGatherCS_H ContactLongGatherCS=ContactLongGatherCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactLongGatherCS_SH ContactLongGatherCS=ContactLongGatherCS_SH SB_SEPARATION=1 SB_HARD_SURFACE=1
+#pragma kernel DragSourceCS
+#pragma kernel DragCorrectCS SB_DRAG_SLICES=4
+#pragma kernel DragGatherCS SB_DRAG_SLICES=4
+// r4-pressure end
+
+// FXC판(D3D11·Metal). D3D12·Vulkan은 SoftbodySurfaceFieldFullDxc.compute(D-60·D-64 — 까닭은 Basic FXC판 주석). 이 파일에 `#pragma use_dxc`를 넣지 않는다(D-60).
+#pragma only_renderers d3d11 metal
+
+// 응답 표 샘플러(원본 `SamplerState ContactResponseSampler;`): Unity 컴퓨트는 샘플러 이름이 sampler<텍스처>이거나 필터·랩 낱말이 든 인라인 이름이어야
+// 묶는다(규약 10 §6.5). 공유 사본은 고치지 않고 include 앞에서 이름만 바꾼다 — 세 겹 선형·가장자리 고정(UE GetLongSampler와 같은 뜻, 표에 밉이 없어
+// Linear와 같다). 유니티 머티리얼(Shaders/Include/SoftbodyMaterial.hlsl)도 같은 인라인 이름을 쓴다. C#은 이 샘플러를 묶지 않는다(규약 20 §2.1 ①).
+#define ContactResponseSampler sampler_LinearClamp
+
+// Basic 자산과 같은 타입 버퍼 → 구조화 버퍼 매크로(D-07, SoftbodySurfaceField.compute 주석).
+#define Buffer StructuredBuffer
+#define RWBuffer RWStructuredBuffer
+
+#include "Packages/com.wjsekrud.mallangphysics/Shaders/Shared/SoftbodySurfaceField.hlsl"

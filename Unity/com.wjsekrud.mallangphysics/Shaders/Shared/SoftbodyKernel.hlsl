@@ -1,0 +1,368 @@
+// [sync_shared_shaders] 자동 생성 사본 — 손으로 고치지 마라. Tools/sync_shared_shaders.py가 UE 원본에서 #include 줄만 바꿔 복사한다.
+// [sync_shared_shaders] 원본: Plugins/SoftbodySystem/Shaders/SoftbodyKernel.ush
+// [sync_shared_shaders] 원본 SHA-256(줄 끝 LF 기준): 2ffb4d1545a6309334153c698937ca11a03f2a83874ed3869ff6d47e6efeaffe
+// [sync_shared_shaders] 원본 git blob SHA-1(git hash-object): 815e09fc8285917e36ac922956ad4f6960b90844
+#ifndef SB_SHARED_SOFTBODYKERNEL_HLSL
+#define SB_SHARED_SOFTBODYKERNEL_HLSL
+#line 1
+// 소프트바디 WPO 커널 (접촉 = 표면 장 변위 + 관성 흔들림 + 변형 한계).
+// 접촉(ADR-0003): 렌더 정점이 텍셀 표의 캐리어 UV로 SurfaceDispTex(컴퓨트가 갱신한 막 평형 변위)를 읽는다.
+//   SurfaceFieldOn = 0(캐리어 없음)이면 접촉 없이 관성만 돈다.
+// 관성(ADR-0005): ContactData = 관성 브릿지 (SoftbodyComponent::BridgeWidth 주석) — 행0 텍셀0.A = 스켈레탈 관성 그룹 수,
+//   행0 텍셀4~7 = 스태틱 메시의 구동점, 행1~8 = 스켈레탈 관성 그룹(그룹당 4텍셀, 배치는 SB_InertiaDriverLag 참고).
+// 최종 합은 길이 상한(MaxDisp)에 부드럽게 붙는다.
+#pragma once
+#include "SoftbodyFieldCommon.hlsl"
+
+#define SB_CAP_SOFT_START 0.7
+
+// 관성 구동점 텍셀. Group < 0 = 스태틱 메시 전체(행0 텍셀4~7), 그 밖 = 스켈레탈 그룹(행1부터 그룹당 4텍셀).
+float4 SB_LoadInertiaEntry(Texture2D ContactData, int Group, int Entry)
+{
+    if (Group < 0)
+    {
+        return SB_LoadContact(ContactData, 4 + Entry, 0);
+    }
+    int flat = 8 + Group * 4 + Entry;
+    return SB_LoadContact(ContactData, flat % 8, flat / 8);
+}
+
+float3 SB_RotateByQuat(float3 V, float4 Q)
+{
+    Q *= rsqrt(max(dot(Q, Q), 1e-8));
+    return V + 2.0 * cross(Q.xyz, cross(Q.xyz, V) + Q.w * V);
+}
+
+float3 SB_SampleInertiaResponse(
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    float2 TexUV, int Response, float ResponseCount)
+{
+    float2 responseUV = float2(TexUV.x, (TexUV.y + (float)Response) / ResponseCount);
+    return InertiaResponseTex.SampleLevel(InertiaResponseTexSampler, responseUV, 0).xyz;
+}
+
+// 관성 표(InertiaResponseTex)의 줄. 줄 하나가 정점 표 한 장이고, 줄 수는 InertiaResponseCount로 온다.
+//   0~2   살의 무름 세 방향(xyz): 살을 +X/+Y/+Z로 당겼을 때 그 정점이 밀리는 방향과 양
+//   3     x, y, z = 살을 +X/+Y/+Z로 당겼을 때 이 정점이 면 밖으로(노멀 방향으로) 밀리는 양 × 칠, a = 노멀(팔면체로 접은 x)
+//   4     면 위에서 접선 1 방향으로 1 cm 갈 때 3줄의 xyz가 바뀌는 양, a = 노멀(팔면체로 접은 y)
+//   5     접선 2 방향으로 같은 것
+//   6     묶음 자리 0, 1의 몫이 1 cm에 바뀌는 양: 접선 1 방향(x, y), 접선 2 방향(z, a). 자리 2의 것 = −(자리 0 + 자리 1)
+// 노멀과 접선은 메시 로컬, 기본 자세다. 3줄뿐이면 흔들릴 때 음영을 기울일 정보(3~6줄)가 없는 옛 굽기다(SoftbodyInertiaTilt가 0을 낸다).
+#define SB_INERTIA_ROWS_SHADING 7
+
+float4 SB_SampleInertiaRow(
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    float2 TexUV, int Row, float RowCount)
+{
+    return InertiaResponseTex.SampleLevel(InertiaResponseTexSampler, float2(TexUV.x, (TexUV.y + (float)Row) / RowCount), 0);
+}
+
+// 구동점 하나가 이 정점 자리에 거는 하중 (ADR-0005).
+// 텍셀: 0 = 가속·중력 xyz + 회전 x, 1 = 회전 yz, 2 = 기본 자세→월드 회전, 3 = 액터 상대 구동점 위치(w = 메시 스케일).
+// 이 점이 받는 힘 = 가속·중력 몫 + 회전 몫 × (정점 − 구동점)을 기본 자세 축에서 만든다.
+struct FSBInertiaLoad
+{
+    float3 Load;        // 기본 자세 축의 하중(cm): 무름 세 방향에 곱하면 흔들림
+    float3 Turn;        // 회전 몫: 자리가 d만큼 옮겨 가면 하중이 cross(Turn, d)만큼 바뀐다
+    float4 Rotation;    // 기본 자세 → 월드
+    float Scale;        // 메시 로컬 1 cm의 월드 길이
+};
+
+FSBInertiaLoad SB_InertiaDriverLoad(Texture2D ContactData, int Group, float3 RelPos)
+{
+    float4 e0 = SB_LoadInertiaEntry(ContactData, Group, 0);
+    float4 e1 = SB_LoadInertiaEntry(ContactData, Group, 1);
+    float4 pivot = SB_LoadInertiaEntry(ContactData, Group, 3);
+    FSBInertiaLoad driver;
+    driver.Rotation = SB_LoadInertiaEntry(ContactData, Group, 2);
+    driver.Turn = float3(e0.w, e1.x, e1.y);
+    float3 arm = SB_RotateByQuat(RelPos - pivot.xyz, float4(-driver.Rotation.xyz, driver.Rotation.w));
+    driver.Load = e0.xyz + cross(driver.Turn, arm);
+    driver.Scale = pivot.w > 0.0 ? pivot.w : 1.0;
+    return driver;
+}
+
+// 구동점 하나가 이 정점에 주는 흔들림 (월드 cm): 하중을 그 축으로 구워진 무름 3방향(Softness0~2 = 살을 +X/+Y/+Z로 당겼을 때
+// 밀리는 모양)에 곱한다.
+float3 SB_InertiaDriverLag(Texture2D ContactData, int Group, float3 RelPos,
+    float3 Softness0, float3 Softness1, float3 Softness2)
+{
+    FSBInertiaLoad driver = SB_InertiaDriverLoad(ContactData, Group, RelPos);
+    return SB_RotateByQuat(Softness0 * driver.Load.x + Softness1 * driver.Load.y + Softness2 * driver.Load.z, driver.Rotation);
+}
+
+// 정점의 본 묶음 셋과 몫. 표의 자리(베이크 FVertexGroups): R = 첫째 묶음, A = 첫째의 몫, B = 둘째 묶음 + 16 × 셋째 묶음,
+// G = 셋째의 몫(둘째의 몫 = 나머지). 같은 묶음이 여러 자리에 있으면 앞자리에 합친다(묶음이 하나뿐인 정점은 세 자리가 같은 묶음이다).
+void SB_DecodeInertiaGroups(float4 a2, int GroupCount, out int3 Group, out float3 Weight)
+{
+    int packed = max((int)round(a2.b), 0);
+    Group = int3(
+        clamp((int)round(a2.r), 0, GroupCount - 1),
+        clamp(packed % 16, 0, GroupCount - 1),
+        clamp(packed / 16, 0, GroupCount - 1));
+    Weight.x = saturate(a2.a);
+    Weight.z = clamp(a2.g, 0.0, 1.0 - Weight.x);
+    Weight.y = 1.0 - Weight.x - Weight.z;
+    if (Group.y == Group.x)
+    {
+        Weight.x += Weight.y;
+        Weight.y = 0.0;
+    }
+    if (Group.z == Group.x)
+    {
+        Weight.x += Weight.z;
+        Weight.z = 0.0;
+    }
+    else if (Group.z == Group.y)
+    {
+        Weight.y += Weight.z;
+        Weight.z = 0.0;
+    }
+}
+
+// 이 정점의 덩어리 묶음이 있는 자리(0~2, 없으면 -1). 베이크(FVertexGroups::PickLump)와 같은 고르기: 덩어리 묶음 가운데 몫이 가장
+// 큰 것 하나, 같으면 앞자리. 덩어리 표지는 브릿지 구동점 텍셀 1의 z.
+int SB_PickLumpSlot(Texture2D ContactData, int3 Group, float3 Weight)
+{
+    float lump0 = SB_LoadInertiaEntry(ContactData, Group.x, 1).z > 0.5 ? Weight.x : 0.0;
+    float lump1 = SB_LoadInertiaEntry(ContactData, Group.y, 1).z > 0.5 ? Weight.y : 0.0;
+    float lump2 = SB_LoadInertiaEntry(ContactData, Group.z, 1).z > 0.5 ? Weight.z : 0.0;
+    if (lump0 > 0.0 && lump0 >= lump1 && lump0 >= lump2)
+    {
+        return 0;
+    }
+    if (lump1 > 0.0 && lump1 >= lump2)
+    {
+        return 1;
+    }
+    return lump2 > 0.0 ? 2 : -1;
+}
+
+// 관성 흔들림(ADR-0005)만 따로: 살 한 점의 흔들림 = 그 점의 무름 × 그 점을 끄는 구동점이 그 자리에 주는 가속·중력 변화,
+// × 페인트 B(관성량). 스켈레탈은 그 점에 걸린 본 그룹 가운데 큰 것 셋을 스킨 비율로 섞고, 스태틱은 메시 전체 구동점 하나.
+// 그룹을 둘만 남기면 셋이 비슷하게 걸린 살(덩어리 + 본 둘)에서 둘째와 셋째가 자리를 바꾸는 선을 따라 몫이 끊겨 살이 어긋난다.
+// WPO 커널과 음영 보정(SoftbodyInertiaTilt: 이 식을 면 위에서 미분한 것)이 같은 식을 쓴다. 관성이 없으면 0.
+// SkipLumps = 1이면 베이크가 이 정점의 덩어리로 고른 묶음(덩어리 묶음 가운데 스킨 비율이 큰 쪽, 같으면 첫째)의 몫을 뺀다 — 그 몫의
+// 노멀은 표면 장 컴퓨트가 캐리어 칸에서 고르게 구한다(ADR-0018). 덩어리 표지는 브릿지 구동점 텍셀 1의 z.
+float3 SoftbodyInertiaLagExcept(
+    float2 TexUV, float3 RelPos,
+    Texture2D Attr2Tex, SamplerState Attr2TexSampler,
+    Texture2D ContactData, SamplerState ContactDataSampler,
+    Texture2D PaintTex, SamplerState PaintTexSampler,
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    float InertiaResponseCount, float SkipLumps)
+{
+    if (InertiaResponseCount <= 0.5)
+    {
+        return float3(0, 0, 0);
+    }
+    float4 paint = PaintTex.SampleLevel(PaintTexSampler, TexUV.xy, 0);
+    float4 a2 = Attr2Tex.SampleLevel(Attr2TexSampler, TexUV.xy, 0);
+    float3 softness0 = SB_SampleInertiaResponse(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 0, InertiaResponseCount);
+    float3 softness1 = SB_SampleInertiaResponse(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 1, InertiaResponseCount);
+    float3 softness2 = SB_SampleInertiaResponse(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 2, InertiaResponseCount);
+    int inertiaGroupCount = clamp((int)round(SB_LoadContact(ContactData, 0, 0).a), 0, 16);
+    float3 lag = float3(0, 0, 0);
+    if (inertiaGroupCount > 0)
+    {
+        int3 group;
+        float3 weight;
+        SB_DecodeInertiaGroups(a2, inertiaGroupCount, group, weight);
+        if (SkipLumps > 0.5)
+        {
+            int skip = SB_PickLumpSlot(ContactData, group, weight);
+            weight *= float3(skip != 0 ? 1.0 : 0.0, skip != 1 ? 1.0 : 0.0, skip != 2 ? 1.0 : 0.0);
+        }
+        if (weight.x > 1e-4)
+        {
+            lag = SB_InertiaDriverLag(ContactData, group.x, RelPos.xyz, softness0, softness1, softness2) * weight.x;
+        }
+        if (weight.y > 1e-4)
+        {
+            lag += SB_InertiaDriverLag(ContactData, group.y, RelPos.xyz, softness0, softness1, softness2) * weight.y;
+        }
+        if (weight.z > 1e-4)
+        {
+            lag += SB_InertiaDriverLag(ContactData, group.z, RelPos.xyz, softness0, softness1, softness2) * weight.z;
+        }
+    }
+    else if (!(SkipLumps > 0.5 && SB_LoadInertiaEntry(ContactData, -1, 1).z > 0.5))
+    {
+        lag = SB_InertiaDriverLag(ContactData, -1, RelPos.xyz, softness0, softness1, softness2);
+    }
+    return lag * paint.b;
+}
+
+float3 SoftbodyInertiaLag(
+    float2 TexUV, float3 RelPos,
+    Texture2D Attr2Tex, SamplerState Attr2TexSampler,
+    Texture2D ContactData, SamplerState ContactDataSampler,
+    Texture2D PaintTex, SamplerState PaintTexSampler,
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    float InertiaResponseCount)
+{
+    return SoftbodyInertiaLagExcept(TexUV, RelPos, Attr2Tex, Attr2TexSampler, ContactData, ContactDataSampler,
+        PaintTex, PaintTexSampler, InertiaResponseTex, InertiaResponseTexSampler, InertiaResponseCount, 0.0);
+}
+
+// 관성 표 3·4줄의 a에 접어 둔 노멀(메시 로컬, 기본 자세)을 펴고, 그 노멀에서 정해진 규칙으로 면 위의 접선 둘을 만든다.
+// 굽기(BuildInertiaShading)가 같은 규칙으로 만든 두 접선 방향으로 기울기를 재어 두었으므로 규칙이 같아야 한다. 어느 축과 곱할지는
+// 펴기 전의 값(더하기·빼기·비교뿐이라 굽기와 한 자리도 다르지 않다)으로 고른다.
+float3 SB_InertiaRestNormal(float2 Folded, out float3 TangentA, out float3 TangentB)
+{
+    float3 v = float3(Folded.x, Folded.y, 1.0 - abs(Folded.x) - abs(Folded.y));
+    float under = max(-v.z, 0.0);
+    v.x += v.x >= 0.0 ? -under : under;
+    v.y += v.y >= 0.0 ? -under : under;
+    float3 normal = v * rsqrt(max(dot(v, v), 1e-12));
+    TangentA = cross(normal, abs(v.z) < 0.5 ? float3(0, 0, 1) : float3(1, 0, 0));
+    TangentA *= rsqrt(max(dot(TangentA, TangentA), 1e-12));
+    TangentB = cross(normal, TangentA);
+    return normal;
+}
+
+// 묶음 하나의 몫을 더한다: 흔들리기 전의 노멀(RestNormal, 월드)과, 면 위로 1 cm 갈 때 흔들림의 노멀 성분이 바뀌는 양(Slope: 월드
+// 벡터, 가장 가파르게 솟는 쪽을 가리키고 길이가 기울기다).
+// Outward = 관성 표 3줄(살을 x·y·z로 당겼을 때 이 정점이 면 밖으로 밀리는 양 × 칠), OutwardSlopeA·B = 4·5줄(그 값의 기울기).
+// 흔들림의 노멀 성분 = 몫 × (Outward · 하중)이므로 그 기울기는 몫의 기울기 × (Outward · 하중) + 몫 × (Outward의 기울기 · 하중
+// + Outward · 하중의 기울기)이고, 하중의 기울기는 회전 몫에서만 나온다(cross(Turn, 접선)).
+// Moves = false(표면 장이 덩어리 노멀을 맡은 묶음)면 노멀만 더하고 흔들림은 뺀다.
+void SB_AddInertiaSlope(
+    Texture2D ContactData, int Group, float3 RelPos, float Weight, float2 WeightSlope, bool Moves,
+    float3 Outward, float3 OutwardSlopeA, float3 OutwardSlopeB,
+    float3 Normal, float3 TangentA, float3 TangentB,
+    inout float3 RestNormal, inout float3 Slope)
+{
+    FSBInertiaLoad driver = SB_InertiaDriverLoad(ContactData, Group, RelPos);
+    RestNormal += SB_RotateByQuat(Normal, driver.Rotation) * Weight;
+    if (!Moves)
+    {
+        return;
+    }
+    float2 slope = WeightSlope * dot(Outward, driver.Load) + Weight * float2(
+        dot(OutwardSlopeA, driver.Load) + dot(Outward, cross(driver.Turn, TangentA)) * driver.Scale,
+        dot(OutwardSlopeB, driver.Load) + dot(Outward, cross(driver.Turn, TangentB)) * driver.Scale);
+    Slope += SB_RotateByQuat(TangentA * slope.x + TangentB * slope.y, driver.Rotation) / driver.Scale;
+}
+
+// 관성 흔들림이 이 정점에서 면을 기울인 회전(축 × sinθ, 월드). WPO는 정점 위치만 옮기므로, 음영이 흔들린 면을 따라가려면 노멀을
+// 이만큼 돌려야 한다.
+// 면이 기우는 것은 흔들림의 노멀 성분(면 밖으로 밀리는 양)이 면 위에서 자리마다 다르기 때문이다. 그 기울기만큼 노멀이 낮은 쪽으로
+// 눕는다: 새 노멀 = 노멀 − 기울기. 기울기는 SoftbodyInertiaLagExcept의 식을 면 위에서 미분한 것이고, 미분에 드는 "이웃 정점과의
+// 차이"는 굽기가 정점마다 구워 둔다(관성 표 3~6줄). 정점마다 하나의 값이라 삼각형 사이에서 끊기지 않고 이어진다 — 삼각형마다 화면
+// 미분으로 구하면 이웃 삼각형과 회전이 달라 메시의 변이 선으로 보인다(일지 133).
+// 줄인 것: 흔들림이 면을 따라 살을 늘이거나 미는 몫은 넣지 않는다(그것까지 넣으려면 정점마다 표를 여섯 번 더 읽어야 하고, 나나이트는
+// 이 계산을 픽셀마다 꼭짓점 셋에 대해 한다). 그래서 크게 흔들릴 때 기우는 각도가 실제보다 2할쯤 어긋날 수 있다(끊기지는 않는다).
+// 음영 줄이 없는 옛 굽기(3줄)는 0을 낸다(흔들려도 음영은 그대로). SkipLumps는 SoftbodyInertiaLagExcept와 같다.
+float3 SoftbodyInertiaTilt(
+    float2 TexUV, float3 RelPos,
+    Texture2D Attr2Tex, SamplerState Attr2TexSampler,
+    Texture2D ContactData, SamplerState ContactDataSampler,
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    float InertiaResponseCount, float SkipLumps)
+{
+    if (InertiaResponseCount < SB_INERTIA_ROWS_SHADING - 0.5)
+    {
+        return float3(0, 0, 0);
+    }
+    float4 outward = SB_SampleInertiaRow(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 3, InertiaResponseCount);
+    float4 outwardSlopeA = SB_SampleInertiaRow(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 4, InertiaResponseCount);
+    float4 outwardSlopeB = SB_SampleInertiaRow(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 5, InertiaResponseCount);
+    float3 tangentA;
+    float3 tangentB;
+    float3 normal = SB_InertiaRestNormal(float2(outward.a, outwardSlopeA.a), tangentA, tangentB);
+
+    float3 restNormal = float3(0, 0, 0);
+    float3 slope = float3(0, 0, 0);
+    int inertiaGroupCount = clamp((int)round(SB_LoadContact(ContactData, 0, 0).a), 0, 16);
+    if (inertiaGroupCount > 0)
+    {
+        float4 a2 = Attr2Tex.SampleLevel(Attr2TexSampler, TexUV.xy, 0);
+        float4 shareSlope = SB_SampleInertiaRow(InertiaResponseTex, InertiaResponseTexSampler, TexUV.xy, 6, InertiaResponseCount);
+        int3 group;
+        float3 weight;
+        SB_DecodeInertiaGroups(a2, inertiaGroupCount, group, weight);
+        int skip = SkipLumps > 0.5 ? SB_PickLumpSlot(ContactData, group, weight) : -1;
+        // 몫의 기울기는 굽기가 묶음마다 앞자리에 합쳐 두었고(같은 묶음의 뒷자리는 0), 셋을 더하면 0이다.
+        float3 shareA = float3(shareSlope.x, shareSlope.y, -(shareSlope.x + shareSlope.y));
+        float3 shareB = float3(shareSlope.z, shareSlope.w, -(shareSlope.z + shareSlope.w));
+        if (weight.x > 1e-4 || abs(shareA.x) + abs(shareB.x) > 1e-6)
+        {
+            SB_AddInertiaSlope(ContactData, group.x, RelPos, weight.x, float2(shareA.x, shareB.x), skip != 0,
+                outward.xyz, outwardSlopeA.xyz, outwardSlopeB.xyz, normal, tangentA, tangentB, restNormal, slope);
+        }
+        if (weight.y > 1e-4 || abs(shareA.y) + abs(shareB.y) > 1e-6)
+        {
+            SB_AddInertiaSlope(ContactData, group.y, RelPos, weight.y, float2(shareA.y, shareB.y), skip != 1,
+                outward.xyz, outwardSlopeA.xyz, outwardSlopeB.xyz, normal, tangentA, tangentB, restNormal, slope);
+        }
+        if (weight.z > 1e-4 || abs(shareA.z) + abs(shareB.z) > 1e-6)
+        {
+            SB_AddInertiaSlope(ContactData, group.z, RelPos, weight.z, float2(shareA.z, shareB.z), skip != 2,
+                outward.xyz, outwardSlopeA.xyz, outwardSlopeB.xyz, normal, tangentA, tangentB, restNormal, slope);
+        }
+    }
+    else
+    {
+        bool moves = !(SkipLumps > 0.5 && SB_LoadInertiaEntry(ContactData, -1, 1).z > 0.5);
+        SB_AddInertiaSlope(ContactData, -1, RelPos, 1.0, float2(0, 0), moves,
+            outward.xyz, outwardSlopeA.xyz, outwardSlopeB.xyz, normal, tangentA, tangentB, restNormal, slope);
+    }
+
+    float restSq = dot(restNormal, restNormal);
+    if (restSq < 1e-12)
+    {
+        return float3(0, 0, 0);
+    }
+    restNormal *= rsqrt(restSq);
+    slope -= restNormal * dot(slope, restNormal);
+    // 1 cm에 2 cm 넘게 솟는 기울기(과한 변형)면 돌리지 않는다.
+    if (dot(slope, slope) > 4.0)
+    {
+        return float3(0, 0, 0);
+    }
+    float3 tilted = restNormal - slope;
+    return cross(restNormal, tilted * rsqrt(dot(tilted, tilted)));
+}
+
+float3 SoftbodyEvalKernel(
+    float2 TexUV, float3 RelPos,
+    Texture2D Attr2Tex, SamplerState Attr2TexSampler,
+    Texture2D ContactData, SamplerState ContactDataSampler,
+    Texture2D PaintTex, SamplerState PaintTexSampler,
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    Texture2D CarrierUVTex, SamplerState CarrierUVTexSampler,
+    Texture2D SurfaceDispTex, SamplerState SurfaceDispTexSampler,
+    float SurfaceAttachRange, float MaxDisp, float SkirtK,
+    float InertiaResponseCount, float3 L2WX, float3 L2WY, float3 L2WZ,
+    float SurfaceFieldOn)
+{
+    // 페인트: R=예약, G=눌리는 정도(캐리어 굽기가 살 두께에 곱한다 — 여기서는 0인 정점만 뗀다), B=관성량, A=부피 보존(굽기가 읽는다).
+    float4 paint = PaintTex.SampleLevel(PaintTexSampler, TexUV.xy, 0);
+    float3 disp = float3(0, 0, 0);
+
+    // --- 접촉: 텍셀 테이블에서 이 정점이 읽을 캐리어 점(봉투 위 가장 가까운 점)을 찾고,
+    // 컴퓨트가 막 평형으로 갱신한 변위(컴포넌트 회전 프레임 cm)를 읽어 회전만 적용한다.
+    // 같은 자리의 층·이음매 복제 정점은 같은 캐리어 점을 읽으므로 함께 움직인다.
+    // 봉투에서 SurfaceAttachRange의 절반까지는 그대로 따라가고, 그 너머는 부드럽게 줄어든다.
+    if (SurfaceFieldOn > 0.5)
+    {
+        float4 carrier = CarrierUVTex.SampleLevel(CarrierUVTexSampler, TexUV.xy, 0);
+        if (carrier.a > 0.5)
+        {
+            float contactGain = max(SkirtK, 0.0) * SB_SurfaceFleshGate(paint.g);
+            float4 field = SurfaceDispTex.SampleLevel(SurfaceDispTexSampler, carrier.xy, 0);
+            float attach = SB_SurfaceAttachWeight(carrier.z, SurfaceAttachRange);
+            float3 fieldLocal = field.rgb * (attach * contactGain);
+            disp += float3(dot(L2WX.xyz, fieldLocal), dot(L2WY.xyz, fieldLocal), dot(L2WZ.xyz, fieldLocal));
+        }
+    }
+
+    // --- 관성 (ADR-0005): SoftbodyInertiaLag 참고. 음영은 MF_SoftbodyContactNormal이 같은 식을 미분해 구한다(SoftbodyInertiaTilt).
+    disp += SoftbodyInertiaLag(TexUV, RelPos, Attr2Tex, Attr2TexSampler, ContactData, ContactDataSampler,
+        PaintTex, PaintTexSampler, InertiaResponseTex, InertiaResponseTexSampler, InertiaResponseCount);
+
+    // --- 변형 한계: 길이 상한(수치 안전장)에 부드럽게 붙는다.
+    return SB_SmoothCap(disp, MaxDisp, SB_CAP_SOFT_START);
+}
+#endif // [sync_shared_shaders] SB_SHARED_SOFTBODYKERNEL_HLSL

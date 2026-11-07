@@ -1,0 +1,42 @@
+// Softbody 표면 장 컴퓨트 셰이더 Full 자산의 DXC판 — D3D12(D-60)와 Vulkan(D-64)이 쓴다. 커널 줄·매크로·include는 SoftbodySurfaceFieldFull.compute(FXC판)와 같다
+// (Tools/sync_shared_shaders.py --check가 두 파일을 다 본다). DXC판을 따로 두는 까닭은 SoftbodySurfaceFieldDxc.compute 머리 주석.
+// r4-pressure begin
+// Full 커널 17줄(접촉 압력 풀이 ADR-0037·끌림 ADR-0033). 별칭 줄 꼴: `<기본>_<접미> <기본>=<기본>_<접미> <순열 매크로>` — 같은 함수를 매크로로 이름만 바꿔
+// 다른 순열로 한 번 더 낸다(접미 _S 부위 나누기 SB_SEPARATION=1, _H 하드 서피스 SB_HARD_SURFACE=1, _SH 둘 다 — 규약 20 §2.1 ②). 원본에 그 순열 갈래가 있는 커널만
+// 별칭을 둔다(칸 목록·긴 몫 모으기 넷, 인자·풀이 둘). 행렬·끌림 셋은 갈래가 없어 한 판으로 모든 순열에 쓴다(UE도 본문이 같다).
+//   ContactPressureArgsCS: 원본이 #if SB_HARD_SURFACE 갈래마다 따로 정의한다 — 순열 0은 묶음 (1,1,1), _H는 (256,1,1)(후보 조각 고르기).
+//   ContactPressurePiecesCS: 하드 서피스 펼치기, 함수가 #if SB_HARD_SURFACE 안에만 있어 늘 SB_HARD_SURFACE=1.
+//   DragCorrectCS·DragGatherCS SB_DRAG_SLICES=4: 끌림 묶음(거친 칸 8×8)의 걸음을 조각 넷으로 나눈 판(UE softbody.Drag.Slices 기본 4, 묶음 (8,8,4)).
+#pragma kernel ContactPressureCellsCS
+#pragma kernel ContactPressureCellsCS_S ContactPressureCellsCS=ContactPressureCellsCS_S SB_SEPARATION=1
+#pragma kernel ContactPressureCellsCS_H ContactPressureCellsCS=ContactPressureCellsCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactPressureCellsCS_SH ContactPressureCellsCS=ContactPressureCellsCS_SH SB_SEPARATION=1 SB_HARD_SURFACE=1
+#pragma kernel ContactPressureArgsCS
+#pragma kernel ContactPressureArgsCS_H ContactPressureArgsCS=ContactPressureArgsCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactPressurePiecesCS SB_HARD_SURFACE=1
+#pragma kernel ContactPressureMatrixCS
+#pragma kernel ContactPressureSolveCS
+#pragma kernel ContactPressureSolveCS_H ContactPressureSolveCS=ContactPressureSolveCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactLongGatherCS
+#pragma kernel ContactLongGatherCS_S ContactLongGatherCS=ContactLongGatherCS_S SB_SEPARATION=1
+#pragma kernel ContactLongGatherCS_H ContactLongGatherCS=ContactLongGatherCS_H SB_HARD_SURFACE=1
+#pragma kernel ContactLongGatherCS_SH ContactLongGatherCS=ContactLongGatherCS_SH SB_SEPARATION=1 SB_HARD_SURFACE=1
+#pragma kernel DragSourceCS
+#pragma kernel DragCorrectCS SB_DRAG_SLICES=4
+#pragma kernel DragGatherCS SB_DRAG_SLICES=4
+// r4-pressure end
+
+// d3d11 = D3D11과 D3D12 둘 다(Unity 6.3의 이름). 이 판은 D3D12와 Vulkan에서만 쓴다. D3D11 장치에서도 만들어지지만 런타임이 고르지 않는다.
+#pragma only_renderers d3d11 vulkan
+#pragma use_dxc d3d11 vulkan
+
+// 응답 표 샘플러(원본 `SamplerState ContactResponseSampler;`): Unity 컴퓨트는 샘플러 이름이 sampler<텍스처>이거나 필터·랩 낱말이 든 인라인 이름이어야
+// 묶는다(규약 10 §6.5). 공유 사본은 고치지 않고 include 앞에서 이름만 바꾼다 — 세 겹 선형·가장자리 고정(UE GetLongSampler와 같은 뜻, 표에 밉이 없어
+// Linear와 같다). 유니티 머티리얼(Shaders/Include/SoftbodyMaterial.hlsl)도 같은 인라인 이름을 쓴다. C#은 이 샘플러를 묶지 않는다(규약 20 §2.1 ①).
+#define ContactResponseSampler sampler_LinearClamp
+
+// 같은 타입 버퍼 → 구조화 버퍼 매크로(D-07, SoftbodySurfaceField.compute 주석).
+#define Buffer StructuredBuffer
+#define RWBuffer RWStructuredBuffer
+
+#include "Packages/com.wjsekrud.mallangphysics/Shaders/Shared/SoftbodySurfaceField.hlsl"

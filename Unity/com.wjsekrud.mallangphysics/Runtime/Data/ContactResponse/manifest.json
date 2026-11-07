@@ -1,0 +1,76 @@
+{
+  "generator": "Tools/convert_contact_response.py",
+  "sources": {
+    "SoftbodyContactResponseTable.inl": {
+      "path": "Plugins/SoftbodySystem/Source/Softbody/SoftbodyContactResponseTable.inl",
+      "git_blob": "3a9a2e5669f9c36a3cc1eebf02b6cf52b40f32de"
+    },
+    "SoftbodyContactResponseBendTable.inl": {
+      "path": "Plugins/SoftbodySystem/Source/Softbody/SoftbodyContactResponseBendTable.inl",
+      "git_blob": "7566728c6ad4e9b9242fada29fc8bdc42d427cbf"
+    }
+  },
+  "textures": [
+    {
+      "name": "Long",
+      "file": "SoftbodyContactResponseLong.bytes",
+      "source": "SoftbodyContactResponseTable.inl",
+      "size": [
+        128,
+        9,
+        9
+      ],
+      "format": "R16_SFloat",
+      "values": 10368,
+      "bytes": 20736,
+      "sum": -36.542751,
+      "sha256": "5e0c51da82fde6abf1db6210ebd5d18d080fdec6a0afd41540bd72d6186bfa33"
+    },
+    {
+      "name": "Amounts",
+      "file": "SoftbodyContactResponseAmounts.bytes",
+      "source": "SoftbodyContactResponseTable.inl",
+      "size": [
+        40,
+        38,
+        171
+      ],
+      "format": "R32_SFloat",
+      "values": 259920,
+      "bytes": 1039680,
+      "sum": 24016.145382,
+      "sha256": "944b8fd045835858f744e24a107fe8d4b6a69084923afb0aa796424a12a9ce50"
+    },
+    {
+      "name": "BendAmounts",
+      "file": "SoftbodyContactResponseBendAmounts.bytes",
+      "source": "SoftbodyContactResponseBendTable.inl",
+      "size": [
+        40,
+        418,
+        171
+      ],
+      "format": "R16_SFloat",
+      "values": 2859120,
+      "bytes": 5718240,
+      "sum": 254809.341606,
+      "sha256": "1800aba5c9ab9377473f68ab6b06744e741f8db14b6325003c82264623e5e32a"
+    },
+    {
+      "name": "BendFull",
+      "file": "SoftbodyContactResponseBendFull.bytes",
+      "source": "SoftbodyContactResponseBendTable.inl",
+      "size": [
+        512,
+        9,
+        153
+      ],
+      "format": "R16_SFloat",
+      "values": 705024,
+      "bytes": 1410048,
+      "sum": 6452.023539,
+      "sha256": "416b68e52d4309e3a99d1fbff5f99396cc793d85963915d5cbcac5e882232998"
+    }
+  ],
+  "total_bytes": 8188704
+}

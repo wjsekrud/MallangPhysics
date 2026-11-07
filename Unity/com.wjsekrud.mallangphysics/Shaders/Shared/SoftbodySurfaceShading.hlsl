@@ -1,0 +1,447 @@
+// [sync_shared_shaders] 자동 생성 사본 — 손으로 고치지 마라. Tools/sync_shared_shaders.py가 UE 원본에서 #include 줄만 바꿔 복사한다.
+// [sync_shared_shaders] 원본: Plugins/SoftbodySystem/Shaders/SoftbodySurfaceShading.ush
+// [sync_shared_shaders] 원본 SHA-256(줄 끝 LF 기준): 24b3756e842eefacab01c010a974c549af952ffcf0ae9304bde28904a13386f7
+// [sync_shared_shaders] 원본 git blob SHA-1(git hash-object): 3d46f6a6a08277e2d72f9038113ab8b1229d0215
+#ifndef SB_SHARED_SOFTBODYSURFACESHADING_HLSL
+#define SB_SHARED_SOFTBODYSURFACESHADING_HLSL
+#line 1
+// ADR-0003 표면 장의 음영 보정과 ADR-0006 정점 사이 함몰 (MF_SoftbodyContactNormal이 include).
+// WPO는 정점 위치만 옮기고 노멀은 그대로 두므로, 눌린 경사면이 눌리기 전과 같은 밝기로 칠해진다.
+// 컴퓨트(NormalCS)가 캐리어 칸마다 "변위 전후 노멀 사이의 회전"과 함몰 어둡기를 SurfaceNormalTex에 써 두고,
+// 여기서 호스트 노멀을 그 회전만큼 돌린다. 노멀을 바꿔치기하지 않고 돌리기 때문에 노멀맵·저작 노멀이 유지된다.
+//
+// 정점 사이(ADR-0006): 코너(원래 정점)가 읽은 캐리어 UV를 보간기로 넘기면, 삼각형 안의 픽셀과 나나이트
+// 테셀레이션이 쪼갠 점도 표면 장을 직접 읽을 수 있다. 그러면
+//  - 음영: 픽셀마다 회전을 읽어, 정점 사이에서 좁게 파인 함몰도 제 모양대로 칠한다.
+//  - 기하: 쪼갠 점에서 읽은 함몰과 코너 함몰을 직선으로 이은 값의 차이(사이 값)만큼 노멀 방향으로 더 민다.
+//    코너에서 사이 값은 0이라, 테셀레이션이 없으면(나나이트 끔, 먼 거리) 지금의 WPO 화면 그대로다.
+// 베이크가 텍셀 표 A에 `2 + 무게`로 둔 "사이 값 무게"가 캐리어 차트 경계를 걸친 삼각형에서 이 둘을 끈다
+// (보간한 UV가 다른 차트를 가리키므로). 옛 베이크(A = 1)는 무게 0 = 정점 보간 그대로다.
+// 메시 캐리어 UV 채널(ADR-0007)이 연결되면 코너가 인스턴스별 UV를 넘기므로 걸친 삼각형이 없고 무게는 1이다.
+//
+// 사이 값을 끈 곳(무게 < 1)은 퐁 곡면으로 채운다: 세 코너의 눌려 기운 노멀에 맞춰 삼각형 안을 휘게 해서, 큰
+// 삼각형이 평평한 면으로 드러나지 않게 한다. 코너 노멀만 쓰므로 차트 경계와 상관없다. 눌리기 전 노멀로 휜 몫은
+// 빼므로(노멀 변화 e = 눌린 노멀 − 원래 노멀만 쓴다) 누르지 않은 몸은 원래 메시 그대로다.
+// 식: 쪼갠 점의 노멀 방향 높이 = Σ wᵢ (rᵢ − r)·eᵢ = 보간(r·e) − r·보간(e)  (rᵢ 코너 위치, r 쪼갠 점 위치, wᵢ 무게중심 좌표)
+// 코너 위치는 WPO 전 위치를 쓴다 — 코너가 노멀 방향으로 움직인 몫은 1차에서 이 식에 들어오지 않는다.
+#pragma once
+#include "SoftbodyFieldCommon.hlsl"
+#include "SoftbodyKernel.hlsl"
+
+// 캐리어 칸의 회전 필드 → 월드 회전(축 × sin, 길이 ≤ 1)과 함몰 어둡기.
+float4 SB_SurfaceTilt(float4 Field, float Gain, float3 L2WX, float3 L2WY, float3 L2WZ)
+{
+    float3 tiltLocal = Field.xyz * Gain;
+    float3 tilt = float3(dot(L2WX, tiltLocal), dot(L2WY, tiltLocal), dot(L2WZ, tiltLocal));
+    float tiltLengthSq = dot(tilt, tilt);
+    if (tiltLengthSq > 1.0)
+    {
+        tilt *= rsqrt(tiltLengthSq);
+    }
+    return float4(tilt, saturate(Field.w * min(Gain, 1.0)));
+}
+
+// 덩어리 이동이 기울인 노멀(ADR-0018): 컴퓨트 접촉 패스가 캐리어 칸마다 구한 회전(화면 노멀 → 덩어리가 옮긴 면, 축 × sin,
+// 프레임)과 덩어리 이동의 노멀 성분(w, cm). 컴포넌트가 SurfaceFieldOn을 2로 밀 때만 이번 프레임 값이다 — 표면 장이 멈췄거나
+// 덩어리가 없으면 1이고, 관성 음영(SoftbodyInertiaTiltVS)이 덩어리까지 그린다. 게인(눌리는 정도 칠이 0인 정점을 떼는 값)은 곱하지
+// 않는다: 덩어리 이동은 접촉이 아니라 관성 흔들림의 몫이다.
+bool SB_LumpNormalsOn(float SurfaceFieldOn)
+{
+    return SurfaceFieldOn > 1.5;
+}
+
+// Contact Detail Full이면 컴포넌트가 SurfaceFieldOn에 0.25를 더해 민다(1.25·2.25, 일지 361) — 위와 아래의 다른 비교(> 0.5·> 1.5)는
+// 정수 부분만 보므로 그대로 맞다. 머티리얼 함수 입력을 늘리지 않으려고 한 값에 묶었다. Full만 함몰 벽을 둘레 4x4 칸으로 세운다(SB_EdgeSideField).
+bool SB_FullDetailOn(float SurfaceFieldOn)
+{
+    return frac(SurfaceFieldOn) > 0.125;
+}
+
+float4 SB_LumpTilt(Texture2D LumpNormalTex, SamplerState LumpNormalTexSampler, float2 UV, float3 L2WX, float3 L2WY, float3 L2WZ)
+{
+    float4 field = LumpNormalTex.SampleLevel(LumpNormalTexSampler, UV, 0);
+    return float4(SB_SurfaceTilt(float4(field.xyz, 0.0), 1.0, L2WX, L2WY, L2WZ).xyz, field.w);
+}
+
+// 코너 캐리어(표 UV로 읽은 SoftbodySurfaceCarrierVS)가 캐리어 칸을 가리키는가. 칸 밖이면 0이다(칸 한가운데 UV는 0이 아니다).
+bool SB_CornerMapped(float4 Carrier)
+{
+    return Carrier.x + Carrier.y > 0.0;
+}
+
+// VS: 이 코너가 읽는 캐리어 — xy = 캐리어 UV, z = 게인(부착 × SkirtStrength, 눌리는 정도 칠이 0인 정점은 0 — 커널과 같은 식),
+// w = 열림과 사이 값 무게를 묶은 값(SB_PackBetweenWeight, 0~1). 표면 장이 꺼져 있거나(SurfaceFieldOn = 0) 캐리어 밖이면 0(게인·무게 0).
+// CarrierUV = 메시 캐리어 UV 채널(ADR-0007 §3.3): 정점 인스턴스마다 자기 UV0 아일랜드 차트의 UV라, UV0 이음매에서 나뉜
+// 두 정점이 각자 자기 차트를 읽는다 → 차트를 걸친 삼각형이 없으므로 무게 1(이음매 정점만 0). 음수(채널 없음·연결 안 함·
+// 봉투 슬롯 밖)면 텍셀 표의 UV(위치당 하나, 코너 WPO와 같은 점)와 표의 무게를 쓴다. 코너 노멀·코너 함몰은 늘 표 UV로
+// 읽는다(MF가 CarrierUV = −1로 한 번 더 부른다) — 이음매에서 나뉜 두 정점이 같은 값을 갖는다.
+// BetweenWeight(0~1, 일지 72): 사이 값 무게에 곱하는 전역 배율. 0이면 쪼갠 점이 장을 읽지 않고 모든 삼각형이 퐁 곡면만
+// 쓰며 픽셀 음영도 코너 보간 회전만 쓴다(비교용).
+// BetweenEdgeTexels(일지 74): 정점 밀도 무게. 베이크가 표 A에 적은 "이 정점에 붙은 변의 평균 길이(캐리어 칸 수)"가 이
+// 값 이하면 사이 값 무게 0(퐁 곡면), 두 배 이상이면 1, 그 사이는 직선. 표면 장은 칸보다 가는 모양이 없으므로 삼각형이 칸
+// 한두 개 크기인 곳은 코너가 이미 장을 다 표본했고, 쪼갠 점이 장을 다시 읽으면 bilinear 꺾임만 더해진다. 0 이하면 끔.
+float SB_TableEdgeTexels(float Code)
+{
+    // 표 A − 2 = 무게(0/1) + 4(이음매) + 8 × round(칸 수 × 64). 몫이 0(이 항목 전 베이크·옛 베이크)이면 정보 없음.
+    return Code >= 8.0 ? floor(Code / 8.0) / 64.0 : 1e4;
+}
+
+float SB_DensityWeight(float EdgeTexels, float BetweenEdgeTexels)
+{
+    return BetweenEdgeTexels > 0.0 ? saturate(EdgeTexels / BetweenEdgeTexels - 1.0) : 1.0;
+}
+
+// 캐리어 보간기 w에 두 무게를 싣는다(ADR-0029 — 보간기를 늘리지 않으려고): w = 열림 × (1 + 사이 값 무게) / 2.
+//  - 열림(Gate): 차트를 걸친 삼각형의 코너·UV0 이음매 정점이 0이다. 쪼갠 점이 장을 읽으면 나나이트 틈이 생기거나 엉뚱한 칸을 읽는 곳.
+//  - 사이 값 무게: 열림 × 정점 밀도 무게(× 전역 배율) — 촘촘한 곳은 퐁 곡면만 쓴다(일지 74).
+// 퐁 섞기 무게 = saturate(2w − 1), 함몰 벽 띠의 열림 = saturate(2w). 열림이 1인 삼각형에서는 전과 같은 값이고, 열림이 0인 코너를
+// 낀 삼각형 한 줄에서만 퐁 섞기 무게가 (1 − 보간한 열림)만큼 덜하다.
+float SB_PackBetweenWeight(float Gate, float Between)
+{
+    return Gate * (1.0 + Between) * 0.5;
+}
+
+float SB_BetweenWeight(float Packed)
+{
+    return saturate(2.0 * Packed - 1.0);
+}
+
+float SB_EdgeGate(float Packed)
+{
+    return saturate(2.0 * Packed);
+}
+
+// 정점 셰이더 함수를 정점마다 한 번만 계산하기(ADR-0013 §9). 엔진(레거시 머티리얼 번역기)은 보간기를 성분마다 따로 부른다 —
+// `OutTexCoords[5].x = VertexInterpolator3(Parameters).x;` 다음 줄에서 .y를 얻으려고 같은 함수를 처음부터 다시 부른다. 우리 함수는
+// 분기가 있고 텍스처를 인자로 받아 컴파일러가 이 호출들을 하나로 합치지 못하므로, float4 보간기 하나가 같은 계산을 네 번 하고
+// 나나이트는 그것을 픽셀마다 코너 셋에서 한다. 그래서 아래 VS 함수들은 마지막 입력과 결과를 static 변수(셰이더 실행 하나 안에서만
+// 사는 값)에 남기고, 입력이 같으면 남긴 결과를 돌려준다. 입력이 하나라도 다르면(나나이트의 다음 코너) 다시 구하므로 결과는 메모가
+// 없을 때와 같다. 텍스처는 비교할 수 없어 입력 비교에서 빠진다 — 이 함수들은 MF_SoftbodyContactNormal이 이번 프레임 보간기에서만
+// 부르므로 한 셰이더 안에서 늘 같은 텍스처를 받는다(지난 프레임 WPO 커널은 메모를 쓰지 않는다).
+static bool SB_CarrierMemoSet = false;
+static float4 SB_CarrierMemoKey0;
+static float4 SB_CarrierMemoKey1;
+static float4 SB_CarrierMemoTable;
+static float3 SB_CarrierMemoMesh;
+
+float4 SoftbodySurfaceCarrierVS(
+    float2 TexUV, float2 CarrierUV,
+    Texture2D CarrierUVTex, SamplerState CarrierUVTexSampler,
+    Texture2D PaintTex, SamplerState PaintTexSampler,
+    float SurfaceAttachRange, float SkirtK, float SurfaceFieldOn, float BetweenWeight, float BetweenEdgeTexels)
+{
+    // 표 읽기와 그 값으로 정해지는 게인·무게는 CarrierUV와 상관없어 메시 캐리어 UV로 부를 때와 표 UV로 부를 때가 함께 쓴다.
+    float4 key0 = float4(TexUV, SurfaceAttachRange, SkirtK);
+    float4 key1 = float4(SurfaceFieldOn, BetweenWeight, BetweenEdgeTexels, 0.0);
+    [branch]
+    if (!SB_CarrierMemoSet || any(key0 != SB_CarrierMemoKey0) || any(key1 != SB_CarrierMemoKey1))
+    {
+        SB_CarrierMemoSet = true;
+        SB_CarrierMemoKey0 = key0;
+        SB_CarrierMemoKey1 = key1;
+        // 표면 장이 꺼져 있거나(SurfaceFieldOn = 0) 캐리어 밖이면 0.
+        SB_CarrierMemoTable = float4(0, 0, 0, 0);
+        SB_CarrierMemoMesh = float3(0, 0, 0);
+        float4 carrier = float4(0, 0, 0, 0);
+        if (SurfaceFieldOn >= 0.5)
+        {
+            carrier = CarrierUVTex.SampleLevel(CarrierUVTexSampler, TexUV.xy, 0);
+        }
+        if (carrier.a > 0.5)
+        {
+            float4 paint = PaintTex.SampleLevel(PaintTexSampler, TexUV.xy, 0);
+            float gain = SB_SurfaceAttachWeight(carrier.z, SurfaceAttachRange) * max(SkirtK, 0.0) * SB_SurfaceFleshGate(paint.g);
+            // 표 A = 2 + 사이 값 무게(차트 경계를 걸친 삼각형의 코너 0) + 4(UV0 이음매 정점, ADR-0007 §3.3)
+            //        + 8 × round(붙은 변 평균 길이 칸 수 × 64)(정점 밀도, 일지 74)
+            float code = carrier.a - 2.0;
+            float scale = saturate(BetweenWeight) * SB_DensityWeight(SB_TableEdgeTexels(code), BetweenEdgeTexels);
+            code = code >= 8.0 ? code - 8.0 * floor(code / 8.0) : code;
+            bool seam = code > 3.0;
+            SB_CarrierMemoTable = float4(carrier.xy, gain, SB_PackBetweenWeight(saturate(seam ? code - 4.0 : code), scale));
+            // 메시 캐리어 UV: 이음매 정점은 0 — 이음매 변 위에서는 양쪽 삼각형이 위치당 하나인 값(코너 WPO·표 UV로 읽은 코너
+            // 노멀의 퐁 곡면)만 써서 나나이트 테셀레이션이 틈을 내지 않는다.
+            SB_CarrierMemoMesh = float3(1.0, gain, SB_PackBetweenWeight(seam ? 0.0 : 1.0, scale));
+        }
+    }
+    if (CarrierUV.x >= 0.0)
+    {
+        return SB_CarrierMemoMesh.x > 0.5 ? float4(CarrierUV, SB_CarrierMemoMesh.yz) : float4(0, 0, 0, 0);
+    }
+    return SB_CarrierMemoTable;
+}
+
+// 회전 c(축 × sin)만큼 노멀 n을 돌린다 (로드리게스, 회전각 ≤ 90°).
+float3 SB_RotateByTilt(float3 c, float3 n)
+{
+    float sinSq = min(dot(c, c), 1.0);
+    if (sinSq < 1e-10)
+    {
+        return n;
+    }
+    float cosTheta = sqrt(1.0 - sinSq);
+    return cosTheta * n + cross(c, n) + c * (dot(c, n) / (1.0 + cosTheta));
+}
+
+// VS: 코너의 노멀 변화(월드, e = 덩어리 이동과 눌림이 기울인 노멀 − 원래 노멀)와 어둡기 (정점 보간용).
+// 회전 대신 노멀 변화를 보간하는 이유: 퐁 곡면 식이 코너 노멀 변화의 정확한 보간을 요구한다. 픽셀은 이것을
+// 다시 회전으로 바꾼다(SoftbodySurfaceShadingPixel). 덩어리 회전(ADR-0018)을 먼저, 그 면에서 눌림이 더 기울인 회전을 다음에
+// 적용한다 — 컴퓨트 노멀 패스가 눌림 회전을 덩어리가 옮긴 면에서 쟀다. 퐁 곡면도 이 노멀 변화로 휘므로 덩어리가 옮긴 모양도
+// 정점 사이가 둥글게 이어진다. 정점마다 한 번만 계산한다(SoftbodySurfaceCarrierVS 위 주석).
+float4 SB_SurfaceShadingCorner(
+    float4 Carrier, float3 VertexNormal,
+    Texture2D SurfaceNormalTex, SamplerState SurfaceNormalTexSampler,
+    Texture2D LumpNormalTex, SamplerState LumpNormalTexSampler, float SurfaceFieldOn,
+    float3 L2WX, float3 L2WY, float3 L2WZ)
+{
+    bool lump = SB_LumpNormalsOn(SurfaceFieldOn) && SB_CornerMapped(Carrier);
+    if (Carrier.z <= 0.0 && !lump)
+    {
+        return float4(0, 0, 0, 0);
+    }
+    float3 n = VertexNormal * rsqrt(max(dot(VertexNormal, VertexNormal), 1e-8));
+    float3 bent = n;
+    if (lump)
+    {
+        bent = SB_RotateByTilt(SB_LumpTilt(LumpNormalTex, LumpNormalTexSampler, Carrier.xy, L2WX, L2WY, L2WZ).xyz, bent);
+    }
+    float occlusion = 0.0;
+    if (Carrier.z > 0.0)
+    {
+        float4 field = SurfaceNormalTex.SampleLevel(SurfaceNormalTexSampler, Carrier.xy, 0);
+        float4 tilt = SB_SurfaceTilt(field, Carrier.z, L2WX, L2WY, L2WZ);
+        bent = SB_RotateByTilt(tilt.xyz, bent);
+        occlusion = tilt.w;
+    }
+    return float4(bent - n, occlusion);
+}
+
+static bool SB_ShadingMemoSet = false;
+static float4 SB_ShadingMemoKey0;
+static float4 SB_ShadingMemoKey1;
+static float3 SB_ShadingMemoKeyX;
+static float3 SB_ShadingMemoKeyY;
+static float3 SB_ShadingMemoKeyZ;
+static float4 SB_ShadingMemo;
+
+float4 SoftbodySurfaceShadingVS(
+    float4 Carrier, float3 VertexNormal,
+    Texture2D SurfaceNormalTex, SamplerState SurfaceNormalTexSampler,
+    Texture2D LumpNormalTex, SamplerState LumpNormalTexSampler, float SurfaceFieldOn,
+    float3 L2WX, float3 L2WY, float3 L2WZ)
+{
+    float4 key1 = float4(VertexNormal, SurfaceFieldOn);
+    [branch]
+    if (!SB_ShadingMemoSet || any(Carrier != SB_ShadingMemoKey0) || any(key1 != SB_ShadingMemoKey1)
+        || any(L2WX != SB_ShadingMemoKeyX) || any(L2WY != SB_ShadingMemoKeyY) || any(L2WZ != SB_ShadingMemoKeyZ))
+    {
+        SB_ShadingMemoSet = true;
+        SB_ShadingMemoKey0 = Carrier;
+        SB_ShadingMemoKey1 = key1;
+        SB_ShadingMemoKeyX = L2WX;
+        SB_ShadingMemoKeyY = L2WY;
+        SB_ShadingMemoKeyZ = L2WZ;
+        SB_ShadingMemo = SB_SurfaceShadingCorner(Carrier, VertexNormal, SurfaceNormalTex, SurfaceNormalTexSampler,
+            LumpNormalTex, LumpNormalTexSampler, SurfaceFieldOn, L2WX, L2WY, L2WZ);
+    }
+    return SB_ShadingMemo;
+}
+
+// VS: 퐁 곡면의 코너 몫 r·e (r = WPO 전 코너 위치, 액터 기준 cm). 쪼갠 점은 이것의 보간에서 r·보간(e)를 뺀다.
+float SoftbodyPhongCornerVS(float4 Shading, float3 RelPos)
+{
+    return dot(RelPos, Shading.xyz);
+}
+
+// VS: 코너 함몰의 노멀 성분(월드 cm, 게인 곱함) + 덩어리 이동의 노멀 성분(ADR-0018). 쪼갠 점에서 "코너 값을 직선으로 이은 값"이
+// 이것의 보간이다.
+float SoftbodyCornerNormalDispVS(
+    float4 Carrier, float3 Normal,
+    Texture2D SurfaceDispTex, SamplerState SurfaceDispTexSampler,
+    Texture2D LumpNormalTex, SamplerState LumpNormalTexSampler, float SurfaceFieldOn,
+    float3 L2WX, float3 L2WY, float3 L2WZ)
+{
+    float height = 0.0;
+    if (Carrier.z > 0.0)
+    {
+        float3 fieldLocal = SurfaceDispTex.SampleLevel(SurfaceDispTexSampler, Carrier.xy, 0).rgb * Carrier.z;
+        float3 fieldWorld = float3(dot(L2WX, fieldLocal), dot(L2WY, fieldLocal), dot(L2WZ, fieldLocal));
+        height = dot(fieldWorld, Normal * rsqrt(max(dot(Normal, Normal), 1e-8)));
+    }
+    if (SB_LumpNormalsOn(SurfaceFieldOn) && SB_CornerMapped(Carrier))
+    {
+        height += LumpNormalTex.SampleLevel(LumpNormalTexSampler, Carrier.xy, 0).w;
+    }
+    return height;
+}
+
+// PS: 정점 보간 노멀 변화(Shading)를 회전으로 바꾸고, 픽셀에서 읽은 회전과 사이 값 무게로 섞는다.
+// 결과는 회전(축 × sin)과 어둡기다.
+float4 SoftbodySurfaceShadingPixel(
+    float4 Shading, float4 Carrier, float3 VertexNormal,
+    Texture2D SurfaceNormalTex, SamplerState SurfaceNormalTexSampler,
+    Texture2D LumpNormalTex, SamplerState LumpNormalTexSampler, float SurfaceFieldOn,
+    float3 L2WX, float3 L2WY, float3 L2WZ)
+{
+    float3 m = VertexNormal * rsqrt(max(dot(VertexNormal, VertexNormal), 1e-8));
+    float3 bent = m + Shading.xyz;
+    float4 corner = float4(0, 0, 0, Shading.w);
+    if (dot(Shading.xyz, Shading.xyz) > 1e-10)
+    {
+        corner.xyz = cross(m, bent * rsqrt(max(dot(bent, bent), 1e-8)));
+    }
+    float weight = SB_BetweenWeight(Carrier.w);
+    bool lump = SB_LumpNormalsOn(SurfaceFieldOn);
+    if (weight <= 0.0 || (Carrier.z <= 0.0 && !lump))
+    {
+        return corner;
+    }
+    // 픽셀에서 읽은 값도 코너와 같은 순서(덩어리 회전 → 그 면에서 눌림 회전)로 돌린다.
+    float3 bentHere = m;
+    if (lump)
+    {
+        bentHere = SB_RotateByTilt(SB_LumpTilt(LumpNormalTex, LumpNormalTexSampler, Carrier.xy, L2WX, L2WY, L2WZ).xyz, bentHere);
+    }
+    float occlusion = 0.0;
+    if (Carrier.z > 0.0)
+    {
+        float4 tilt = SB_SurfaceTilt(SurfaceNormalTex.SampleLevel(SurfaceNormalTexSampler, Carrier.xy, 0), Carrier.z, L2WX, L2WY, L2WZ);
+        bentHere = SB_RotateByTilt(tilt.xyz, bentHere);
+        occlusion = tilt.w;
+    }
+    return lerp(corner, float4(cross(m, bentHere), occlusion), weight);
+}
+
+// VS: 관성 흔들림이 이 정점에서 면을 기울인 회전(축 × sinθ, 월드) — SoftbodyInertiaTilt(커널). 보간기로 넘겨 픽셀이 호스트 노멀을
+// 돌린다. 정점마다 하나의 값을 삼각형 안에서 이으므로 이웃 삼각형과 끊기지 않는다(일지 133; 전에는 픽셀이 화면 미분으로 삼각형마다
+// 한 값을 구해 메시의 변이 선으로 보였다). 본 그룹·관성 표 텍스처는 정점 번호 순서의 표라 픽셀에서는 읽을 수 없다(일지 69).
+// 표 읽기는 정점마다 다섯 번(본 그룹 1, 관성 표 4)으로, 화면 미분으로 구하던 때(칠 1, 본 그룹 1, 무름 3)와 같다.
+// 덩어리 노멀이 이번 프레임 값이고(SurfaceFieldOn = 2) 이 코너가 캐리어 칸을 가리키면, 덩어리 몫은 컴퓨트가 고르게 구한 회전이
+// 맡으므로 뺀다(ADR-0018). 빼는 묶음은 베이크가 그 정점의 덩어리로 고른 것 하나다(SoftbodyInertiaLagExcept).
+// 정점마다 한 번만 계산한다(SoftbodySurfaceCarrierVS 위 주석).
+static bool SB_TiltMemoSet = false;
+static float4 SB_TiltMemoKey0;
+static float3 SB_TiltMemoKey1;
+static float3 SB_TiltMemo;
+
+float3 SoftbodyInertiaTiltVS(
+    float2 TexUV, float3 RelPos,
+    Texture2D Attr2Tex, SamplerState Attr2TexSampler,
+    Texture2D ContactData, SamplerState ContactDataSampler,
+    Texture2D InertiaResponseTex, SamplerState InertiaResponseTexSampler,
+    float InertiaResponseCount, float4 Carrier, float SurfaceFieldOn)
+{
+    float skipLumps = SB_LumpNormalsOn(SurfaceFieldOn) && SB_CornerMapped(Carrier) ? 1.0 : 0.0;
+    float4 key0 = float4(TexUV, InertiaResponseCount, skipLumps);
+    [branch]
+    if (!SB_TiltMemoSet || any(key0 != SB_TiltMemoKey0) || any(RelPos != SB_TiltMemoKey1))
+    {
+        SB_TiltMemoSet = true;
+        SB_TiltMemoKey0 = key0;
+        SB_TiltMemoKey1 = RelPos;
+        SB_TiltMemo = SoftbodyInertiaTilt(TexUV, RelPos, Attr2Tex, Attr2TexSampler, ContactData, ContactDataSampler,
+            InertiaResponseTex, InertiaResponseTexSampler, InertiaResponseCount, skipLumps);
+    }
+    return SB_TiltMemo;
+}
+
+// PS: 호스트 노멀(월드)을 관성 흔들림의 회전(보간된 SoftbodyInertiaTiltVS), 그다음 표면 장의 회전만큼 돌린다. 회전 c = 축 × sinθ,
+// cosθ = √(1 − |c|²)일 때 로드리게스 식 v' = cosθ·v + c × v + c·(c·v)/(1 + cosθ). 둘 다 작은 회전이라 순서의 차이는 무시한다.
+float3 SoftbodySurfaceShadingPS(float4 Shading, float3 InertiaTilt, float3 BaseNormal)
+{
+    float3 n = BaseNormal * rsqrt(max(dot(BaseNormal, BaseNormal), 1e-8));
+    n = SB_RotateByTilt(InertiaTilt, n);
+    return normalize(SB_RotateByTilt(Shading.xyz, n));
+}
+
+// 나나이트 Displacement(0~1): 쪼갠 점의 사이 값을 머티리얼의 변위 크기·중심으로 맞춘다.
+// 엔진은 (값 − 중심) × 크기만큼 보간 노멀 방향으로 민다(메시 로컬 → 컴포넌트 스케일이 곱해진다).
+// TessMagnitude = 머티리얼 크기 × 컴포넌트 스케일(월드 cm), TessCenter = 머티리얼 중심 — 컴포넌트가 넣는다.
+// 범위를 넘는 사이 값은 잘린다(지금 화면보다 나빠지지는 않는다).
+// 사이 값 무게만큼은 표면 장에서 읽은 실제 값, 나머지는 퐁 곡면(Shading = 보간한 노멀 변화, PhongDot = 보간한
+// 코너 r·e, RelPos = 쪼갠 점의 WPO 전 위치, PhongStrength = 휘는 정도 0~1).
+// 함몰 벽(ADR-0029): 변위 표본의 A(콜라이더 가장자리까지 부호 거리, 칸 수)가 가장자리 1.5칸 안이면 둘레 칸을 따로 읽어 벽을
+// 가장자리 선 위에 세운다(SB_EdgeSideField → SB_EdgeWallBlend, SoftbodyFieldCommon.ush) — 벽이 칸 격자가 아니라 실제 가장자리에
+// 선다. 가장자리 1칸 안은 정점이 촘촘해도(퐁 곡면만 쓰던 곳) 장을 읽고, 2칸까지 서서히 퐁으로 돌아간다. 쪼갠 점 변위는 래스터에서
+// 쪼갠 정점마다 계산하므로(엔진 NaniteRasterizationCommon.ush만 부른다 — 음영 패스는 깊이에서 위치를 되살린다) 늘어난 읽기는 벽 띠의
+// 쪼갠 정점에만 든다(일지 359: Full은 4 → 16칸, Basic은 4칸 그대로 — 일지 361).
+
+// 쪼갠 점 둘레 칸을 읽어 벽을 세운다. Full(bWallGhost)은 4x4 칸으로 SB_EdgeWallBlend, Basic은 2x2 칸으로 SB_EdgeSameSideBlend —
+// 옷 밑 피부 칸 베끼기(SB_GhostFinalAt)도 같은 함수를 같은 단계로 고른다.
+float3 SB_EdgeSideField(Texture2D SurfaceDispTex, float2 UV, bool bWallGhost)
+{
+    uint width;
+    uint height;
+    SurfaceDispTex.GetDimensions(width, height);
+    float2 g = UV * float2(width, height) - 0.5;
+    int2 i0 = (int2)floor(g);
+    float2 f = g - (float2)i0;
+    int2 last = int2(width, height) - 1;
+    [branch]
+    if (bWallGhost)
+    {
+        float4 v[16];
+        float use[16];
+        [unroll]
+        for (int i = 0; i < 16; ++i)
+        {
+            v[i] = SurfaceDispTex.Load(int3(clamp(i0 + int2(i & 3, i >> 2) - 1, 0, last), 0));
+            use[i] = 1.0;
+        }
+        float coverage;
+        return SB_EdgeWallBlend(v, use, f, coverage);
+    }
+    float4 corner[4];
+    [unroll]
+    for (int k = 0; k < 4; ++k)
+    {
+        corner[k] = SurfaceDispTex.Load(int3(clamp(i0 + int2(k & 1, k >> 1), 0, last), 0));
+    }
+    return SB_EdgeSameSideBlend(corner, float4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y));
+}
+
+float SoftbodyTessellationDisplacement(
+    float4 Carrier, float CornerNormalDisp, float3 Normal,
+    float4 Shading, float PhongDot, float3 RelPos, float PhongStrength,
+    Texture2D SurfaceDispTex, SamplerState SurfaceDispTexSampler,
+    Texture2D LumpNormalTex, SamplerState LumpNormalTexSampler, float SurfaceFieldOn,
+    float3 L2WX, float3 L2WY, float3 L2WZ,
+    float TessMagnitude, float TessCenter)
+{
+    if (TessMagnitude <= 1e-4)
+    {
+        return TessCenter;
+    }
+    float weight = SB_BetweenWeight(Carrier.w);
+    float gate = SB_EdgeGate(Carrier.w);
+    float3 field = float3(0, 0, 0);
+    // 게인이 0이면 장은 높이에 들어가지 않으므로 읽지 않는다(덩어리 높이만, 전과 같은 무게로).
+    if (gate > 0.0 && Carrier.z > 0.0)
+    {
+        float4 disp = SurfaceDispTex.SampleLevel(SurfaceDispTexSampler, Carrier.xy, 0);
+        float edge = abs(disp.a - SB_EDGE_RANGE);
+        weight = max(weight, gate * (1.0 - smoothstep(1.0, 2.0, edge)));
+        field = disp.rgb;
+        [branch]
+        if (weight > 0.0 && edge < 1.5)
+        {
+            field = SB_EdgeSideField(SurfaceDispTex, Carrier.xy, SB_FullDetailOn(SurfaceFieldOn));
+        }
+    }
+    float height = 0.0;
+    if (weight < 1.0)
+    {
+        height = (1.0 - weight) * saturate(PhongStrength) * (PhongDot - dot(RelPos, Shading.xyz));
+    }
+    if (weight > 0.0)
+    {
+        float3 fieldLocal = field * max(Carrier.z, 0.0);
+        float3 fieldWorld = float3(dot(L2WX, fieldLocal), dot(L2WY, fieldLocal), dot(L2WZ, fieldLocal));
+        float3 n = Normal * rsqrt(max(dot(Normal, Normal), 1e-8));
+        // 덩어리 이동의 노멀 성분(ADR-0018)도 쪼갠 점에서 읽는다 — 코너 값(CornerNormalDisp)에도 들어 있다.
+        float lumpHeight = SB_LumpNormalsOn(SurfaceFieldOn)
+            ? LumpNormalTex.SampleLevel(LumpNormalTexSampler, Carrier.xy, 0).w : 0.0;
+        height += weight * (dot(fieldWorld, n) + lumpHeight - CornerNormalDisp);
+    }
+    return saturate(height / TessMagnitude + TessCenter);
+}
+#endif // [sync_shared_shaders] SB_SHARED_SOFTBODYSURFACESHADING_HLSL
