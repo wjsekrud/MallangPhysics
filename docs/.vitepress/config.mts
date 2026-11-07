@@ -194,6 +194,8 @@ const override = (file: string) => fileURLToPath(new URL(`./theme/${file}`, impo
 export default defineConfig<DefaultTheme.Config & { enginePages?: string[] }>({
   base,
   cleanUrls: true,
+  // 검색 엔진용 사이트 지도(sitemap.xml). Search Console에 제출한다
+  sitemap: { hostname: 'https://wjsekrud.github.io/MallangPhysics/' },
   srcExclude: ['README.md', ...drafts.map((d) => d + '**')],
   head: [['link', { rel: 'icon', type: 'image/png', href: `${base}favicon.png` }]],
 
