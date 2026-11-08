@@ -166,7 +166,7 @@ The Output Log gives the reason for each piece ([Troubleshooting](Troubleshootin
 
 ## Simulation tab
 
-Runs the last bake like a game. It starts the first time you look at the tab and runs only while the tab is visible and the editor is in front. Closing the tab releases everything it used. When a bake button such as Run Bake finishes, it restarts by itself.
+Runs the last bake like a game. It starts the first time you look at the tab and runs only while the tab is visible and the editor is in front. Closing the tab releases everything it used. When a bake button such as Run Bake finishes, it restarts by itself. On a skeletal mesh, the **Post Process Anim Blueprint** set on the mesh asset (such as one with a KawaiiPhysics node) also runs, as in a level. The Preview tab draws the reference pose and does not run it.
 
 - **Ctrl + left-drag:** press with a finger. The round tip sticks to the surface under the cursor and follows that surface inward, and it does not go past the far side. Turn the mouse wheel while holding to press deeper or shallower. The bottom left shows the current depth and tip size.
 - **Ctrl + right-drag:** hold the skin in the Grab Radius circle under the cursor and pull it. The held spot moves at most 1.3 times the smaller of Grab Radius and the flesh thickness there, and stays at that limit if you pull farther. Turn the mouse wheel while holding to pull it nearer or farther. Basic pulls outward only; Full also stretches the skin sideways.

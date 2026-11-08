@@ -28,7 +28,10 @@ const columns = computed(() => {
     },
     {
       title: k ? '문의' : 'Contact',
-      links: [{ text: k ? '버그 신고' : 'Report Issues', href: `${REPO}/issues` }],
+      links: [
+        { text: k ? '버그 신고' : 'Report Issues', href: `${REPO}/issues` },
+        { text: k ? '메일 문의' : 'Contact Me', href: 'mailto:ivrpt2141@gmail.com' },
+      ],
     },
     {
       title: k ? '참고' : 'References',
