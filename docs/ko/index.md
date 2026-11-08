@@ -1,7 +1,7 @@
 ---
 layout: home
 title: MallangPhysics
-titleTemplate: Unreal Engine 5.6~5.8을 위한 말랑한 살
+titleTemplate: Unreal Engine 5 소프트바디 플러그인
 
 hero:
   name: MallangPhysics

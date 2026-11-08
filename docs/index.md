@@ -1,7 +1,7 @@
 ---
 layout: home
 title: MallangPhysics
-titleTemplate: Soft flesh for Unreal Engine 5.6–5.8
+titleTemplate: Softbody Plugin for Unreal Engine 5
 
 hero:
   name: MallangPhysics
